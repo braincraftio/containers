@@ -1,0 +1,163 @@
+# mise configuration for containers project
+# https://mise.jdx.dev/
+
+[env]
+# Docker build configuration
+DOCKER_BUILDKIT = "1"
+BUILDKIT_INLINE_CACHE = "1"
+COMPOSE_DOCKER_CLI_BUILD = "1"
+
+# Container registry and naming
+REGISTRY = "ghcr.io"
+NAMESPACE = "braincraftio"
+IMAGE_NAME = "devcontainer"
+IMAGE_TAG = "latest"
+
+# Build paths
+DOCKERFILE_PATH = "devcontainer/Dockerfile"
+BUILD_CONTEXT = ".."
+
+# ========================================
+# Docker Tasks
+# ========================================
+
+# Build the devcontainer image
+[tasks."docker:build"]
+description = "Build the BrainCraft.io devcontainer image"
+run = '''
+    echo "🔨 Building devcontainer image..."
+    sudo docker build \
+        --progress plain \
+        --tag ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
+        --tag ${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
+        --file ${DOCKERFILE_PATH} \
+        ${BUILD_CONTEXT}
+    echo "✅ Build complete: ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+'''
+
+# Build with no cache
+[tasks."docker:build:nocache"]
+description = "Build the devcontainer image without cache"
+run = '''
+    echo "🔨 Building devcontainer image (no cache)..."
+    sudo docker build \
+        --progress plain \
+        --no-cache \
+        --tag ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
+        --tag ${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
+        --file ${DOCKERFILE_PATH} \
+        ${BUILD_CONTEXT}
+    echo "✅ Build complete: ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+'''
+
+# Build for multiple platforms
+[tasks."docker:build:multiplatform"]
+description = "Build the devcontainer image for multiple platforms"
+run = '''
+    echo "🔨 Building multiplatform devcontainer image..."
+    sudo docker buildx build \
+        --progress plain \
+        --platform linux/amd64,linux/arm64 \
+        --tag ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
+        --tag ${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
+        --file ${DOCKERFILE_PATH} \
+        ${BUILD_CONTEXT}
+    echo "✅ Multiplatform build complete"
+'''
+
+# Run the devcontainer
+[tasks."docker:run"]
+description = "Run the devcontainer interactively"
+run = '''
+    echo "🚀 Running devcontainer..."
+    sudo docker run --rm -it \
+        --name braincraftio-dev \
+        --hostname braincraftio \
+        --volume ${PWD}/..:/workspace:cached \
+        --volume /var/run/docker.sock:/var/run/docker.sock \
+        --env DOCKER_HOST=unix:///var/run/docker.sock \
+        ${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
+'''
+
+# Push to registry
+[tasks."docker:push"]
+description = "Push the devcontainer image to registry"
+run = '''
+    echo "📤 Pushing image to registry..."
+    sudo docker push ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
+    echo "✅ Push complete"
+'''
+
+# Clean up images
+[tasks."docker:clean"]
+description = "Remove devcontainer images"
+run = '''
+    echo "🧹 Cleaning up devcontainer images..."
+    sudo docker rmi ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} || true
+    sudo docker rmi ${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} || true
+    echo "✅ Cleanup complete"
+'''
+
+# Show image info
+[tasks."docker:info"]
+description = "Show devcontainer image information"
+run = '''
+    echo "📋 Devcontainer Image Information"
+    echo "================================"
+    echo "Registry: ${REGISTRY}"
+    echo "Namespace: ${NAMESPACE}"
+    echo "Image: ${IMAGE_NAME}"
+    echo "Tag: ${IMAGE_TAG}"
+    echo "Full name: ${REGISTRY}/${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+    echo ""
+    echo "🏷️  Local images:"
+    sudo docker images | grep ${IMAGE_NAME} || echo "No local images found"
+'''
+
+# Test the container
+[tasks."docker:test"]
+description = "Test the devcontainer with basic checks"
+run = '''
+    echo "🧪 Testing devcontainer..."
+    sudo docker run --rm \
+        ${NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
+        bash -c "
+            echo '✓ Container started successfully'
+            echo '✓ Checking installed tools...'
+            command -v mise && echo '  ✓ mise installed'
+            command -v docker && echo '  ✓ docker installed'
+            command -v go && echo '  ✓ go installed'
+            command -v node && echo '  ✓ node installed'
+            command -v python3 && echo '  ✓ python installed'
+            command -v cargo && echo '  ✓ rust installed'
+            echo '✓ All basic checks passed!'
+        "
+'''
+
+# Install task (placeholder for consistency)
+[tasks.install]
+description = "Install dependencies (no-op for containers)"
+run = "echo 'No dependencies to install for containers project'"
+
+# Lint Dockerfile
+[tasks.lint]
+description = "Lint Dockerfiles"
+run = '''
+    if command -v hadolint &> /dev/null; then
+        echo "🔍 Linting Dockerfiles..."
+        hadolint ${DOCKERFILE_PATH}
+        echo "✅ Dockerfile lint complete"
+    else
+        echo "⚠️  hadolint not installed. Install with: brew install hadolint"
+    fi
+'''
+
+# Build task alias
+[tasks.build]
+description = "Build the devcontainer image"
+depends = ["docker:build"]
+
+# Clean task alias
+[tasks.clean]
+description = "Clean up Docker images"
+depends = ["docker:clean"]

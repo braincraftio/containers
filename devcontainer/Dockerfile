@@ -606,14 +606,15 @@ symbol = "📦 "
 EOF
 
 #################################################################################
-# Configure direnv whitelist
+# Configure direnv whitelist and mise trusted paths
 #################################################################################
 
-RUN echo \
-  && mkdir -p ~/.config/direnv \
-  && echo '[whitelist]' > ~/.config/direnv/direnv.toml \
-  && echo 'prefix = [ "/workspace" ]' >> ~/.config/direnv/direnv.toml \
-  && echo
+# Create config directories
+RUN mkdir -p ~/.config/direnv ~/.config/mise
+
+# Copy configuration files
+COPY --chown=ubuntu:ubuntu config/direnv.toml /home/ubuntu/.config/direnv/direnv.toml
+COPY --chown=ubuntu:ubuntu config/mise.toml /home/ubuntu/.config/mise/config.toml
 
 # Change to workspace
 WORKDIR /workspace
@@ -660,9 +661,9 @@ WORKDIR /workspace
 #################################################################################
 
 RUN echo \
-  && ~/.local/bin/mise use -g node@22 \
-  && ~/.local/bin/mise use -g python@3.12 \
-  && ~/.local/bin/mise use -g go@1.23 \
+  && ~/.local/bin/mise use -g node@24 \
+  && ~/.local/bin/mise use -g python@3.13 \
+  && ~/.local/bin/mise use -g go@1.24.4 \
   && ~/.local/bin/mise use -g task@latest \
   && ~/.local/bin/mise use -g gh@latest \
   && ~/.local/bin/mise use -g jq@latest \
@@ -675,7 +676,7 @@ RUN echo \
 
 RUN echo \
   && export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH" \
-  && ~/.local/bin/mise exec node@22 -- npm install -g \
+  && ~/.local/bin/mise exec node -- npm install -g \
   @devcontainers/cli \
   prettier \
   eslint \
@@ -692,7 +693,7 @@ RUN echo \
 
 RUN echo \
   && export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH" \
-  && ~/.local/bin/mise exec node@22 -- npx playwright install chromium firefox webkit \
+  && ~/.local/bin/mise exec node -- npx playwright install chromium firefox webkit \
   && echo
 
 #################################################################################
@@ -701,7 +702,7 @@ RUN echo \
 
 RUN echo \
   && export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH" \
-  && ~/.local/bin/mise exec python@3.12 -- pip install --user \
+  && ~/.local/bin/mise exec python -- pip install --user \
   poetry \
   pipx \
   black \
@@ -817,7 +818,7 @@ RUN echo \
 # Copy entrypoint script
 #################################################################################
 
-COPY --chown=ubuntu:ubuntu containers/devcontainer/bin/entrypoint /usr/local/bin/entrypoint
+COPY --chown=ubuntu:ubuntu bin/entrypoint /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
 
 #################################################################################
@@ -840,12 +841,8 @@ ENV DIRENV_LOG_FORMAT=""
 # Path configuration - comprehensive
 ENV PATH="/home/ubuntu/.local/share/mise/shims:/home/ubuntu/.local/bin:/workspace/.npm-global/bin:/go/bin:/home/ubuntu/.cargo/bin:/home/ubuntu/.krew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/nix/var/nix/profiles/default/bin"
 
-# Language versions
-ENV GO_VERSION="1.23"
-ENV NODE_VERSION="24"
-ENV PYTHON_VERSION="3.13"
-ENV RUST_VERSION="stable"
-ENV GOLANGCI_LINT_VERSION="v1.64.8"
+# Language versions are managed by mise from .mise.toml
+# ENV variables removed to centralize version management
 
 # Go configuration
 ENV GOPATH="/go"
@@ -897,5 +894,5 @@ SHELL ["/bin/bash", "-l", "-c"]
 # Set entrypoint or default command
 #################################################################################
 
-# Default command - using bash directly since entrypoint might not exist
-CMD ["/bin/bash", "-l"]
+# Use our entrypoint script that handles mise trust and other setup
+ENTRYPOINT ["/usr/local/bin/entrypoint"]

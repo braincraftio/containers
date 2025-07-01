@@ -87,5 +87,9 @@ echo "✨ DevContainer ready!"
 echo "💡 Run 'mise tasks' to see available commands"
 echo ""
 
-# Keep container running
-exec /bin/bash
+# Execute the command passed to the container (or bash if none)
+if [ $# -eq 0 ]; then
+    exec /bin/bash -l
+else
+    exec "$@"
+fi

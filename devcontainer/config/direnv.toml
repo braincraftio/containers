@@ -1,0 +1,6 @@
+# BrainCraft.io DevContainer direnv configuration
+# This file configures direnv to automatically allow .envrc files in /workspace
+
+[whitelist]
+# Automatically allow .envrc files in the workspace directory
+prefix = [ "/workspace" ]

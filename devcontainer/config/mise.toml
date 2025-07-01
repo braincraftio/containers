@@ -1,0 +1,28 @@
+# BrainCraft.io DevContainer mise configuration
+# This file configures mise to automatically trust the /workspace directory
+
+[settings]
+# Automatically trust configuration files in /workspace
+trusted_config_paths = ["/workspace"]
+
+# Enable experimental features for better DevContainer experience
+experimental = true
+
+# Yes mode - assume yes for all prompts (useful for automation)
+yes = true
+
+# Suppress warnings for missing tools in DevContainer
+status.missing_tools = "never"
+
+# Don't be paranoid about security checks (we trust our DevContainer)
+paranoid = false
+
+# Keep output visible for debugging
+quiet = false
+verbose = false
+
+# Auto-install missing tools when commands are run
+not_found_auto_install = true
+
+# Number of parallel jobs for installations
+jobs = 4

@@ -379,34 +379,35 @@ RUN echo \
 # Install Helm
 #################################################################################
 
-RUN echo \
-  && export NAME="helm" \
-  && export TEST="${NAME} version" \
-  && export REPOSITORY="helm/helm" \
-  && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
-  && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
-  && export PKG="${NAME}-${VERSION}-linux-${ARCH}.tar.gz" \
-  && export URL="https://get.helm.sh/${PKG}" \
-  && echo "---------------------------------------------------------"\
-  && echo "INFO[${NAME}] Installed:" \
-  && echo "INFO[${NAME}]   Command:        ${NAME}" \
-  && echo "INFO[${NAME}]   Package:        ${PKG}" \
-  && echo "INFO[${NAME}]   Latest Release: ${VERSION}" \
-  && echo "INFO[${NAME}]   Architecture:   ${ARCH}" \
-  && echo "INFO[${NAME}]   Source:         ${URL}" \
-  && echo "---------------------------------------------------------"\
-  && /usr/bin/curl --silent --show-error --tlsv1.2 --location ${URL} | tar xz -C /tmp \
-  && install -m 755 -o root -g root /tmp/linux-${ARCH}/${NAME} /usr/local/bin/${NAME} \
-  && rm -rf \
-  /var/lib/{apt,cache,log} \
-  /usr/share/{doc,man,locale} \
-  /var/cache/apt \
-  /home/*/.cache \
-  /root/.cache \
-  /var/tmp/* \
-  /tmp/* \
-  && ${TEST} \
-  && echo
+# TODO: Install helm via mise instead of curl - GitHub API rate limiting causes failures
+# RUN echo \
+#   && export NAME="helm" \
+#   && export TEST="${NAME} version" \
+#   && export REPOSITORY="helm/helm" \
+#   && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
+#   && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
+#   && export PKG="${NAME}-${VERSION}-linux-${ARCH}.tar.gz" \
+#   && export URL="https://get.helm.sh/${PKG}" \
+#   && echo "---------------------------------------------------------"\
+#   && echo "INFO[${NAME}] Installed:" \
+#   && echo "INFO[${NAME}]   Command:        ${NAME}" \
+#   && echo "INFO[${NAME}]   Package:        ${PKG}" \
+#   && echo "INFO[${NAME}]   Latest Release: ${VERSION}" \
+#   && echo "INFO[${NAME}]   Architecture:   ${ARCH}" \
+#   && echo "INFO[${NAME}]   Source:         ${URL}" \
+#   && echo "---------------------------------------------------------"\
+#   && /usr/bin/curl --silent --show-error --tlsv1.2 --location ${URL} | tar xz -C /tmp \
+#   && install -m 755 -o root -g root /tmp/linux-${ARCH}/${NAME} /usr/local/bin/${NAME} \
+#   && rm -rf \
+#   /var/lib/{apt,cache,log} \
+#   /usr/share/{doc,man,locale} \
+#   /var/cache/apt \
+#   /home/*/.cache \
+#   /root/.cache \
+#   /var/tmp/* \
+#   /tmp/* \
+#   && ${TEST} \
+#   && echo
 
 #################################################################################
 # Install GitHub Actions Runner

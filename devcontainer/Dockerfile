@@ -662,15 +662,18 @@ WORKDIR /workspace
 # Install mise global tools that should be available immediately
 #################################################################################
 
-RUN echo \
-  && ~/.local/bin/mise use -g node@24 \
-  && ~/.local/bin/mise use -g python@3.13 \
-  && ~/.local/bin/mise use -g go@1.24.4 \
-  && ~/.local/bin/mise use -g task@latest \
-  && ~/.local/bin/mise use -g gh@latest \
-  && ~/.local/bin/mise use -g jq@latest \
-  && ~/.local/bin/mise use -g yq@latest \
-  && echo
+# TODO: Tools should be installed via workspace .mise.toml, not in container build
+# This was causing 3+ hour build times. Tools will be installed on first container
+# start and cached in persistent volumes.
+# RUN echo \
+#   && ~/.local/bin/mise use -g node@24 \
+#   && ~/.local/bin/mise use -g python@3.13 \
+#   && ~/.local/bin/mise use -g go@1.24.4 \
+#   && ~/.local/bin/mise use -g task@latest \
+#   && ~/.local/bin/mise use -g gh@latest \
+#   && ~/.local/bin/mise use -g jq@latest \
+#   && ~/.local/bin/mise use -g yq@latest \
+#   && echo
 
 #################################################################################
 # Pre-install some global npm packages for better DevX
@@ -718,16 +721,18 @@ RUN echo \
 # Install Go tools
 #################################################################################
 
-RUN echo \
-  && export GOPATH=/go \
-  && export PATH="$HOME/.local/share/mise/installs/go/latest/bin:${PATH}" \
-  && export GOLANGCI_LINT_VERSION="v1.64.8" \
-  && go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION} \
-  && go install golang.org/x/vuln/cmd/govulncheck@latest \
-  && go install golang.org/x/tools/gopls@latest \
-  && go install github.com/go-delve/delve/cmd/dlv@latest \
-  && go install github.com/air-verse/air@latest \
-  && echo
+# TODO: Go tools should be installed via workspace configuration
+# These compile from source and significantly increase build time
+# RUN echo \
+#   && export GOPATH=/go \
+#   && export PATH="$HOME/.local/share/mise/installs/go/latest/bin:${PATH}" \
+#   && export GOLANGCI_LINT_VERSION="v1.64.8" \
+#   && go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION} \
+#   && go install golang.org/x/vuln/cmd/govulncheck@latest \
+#   && go install golang.org/x/tools/gopls@latest \
+#   && go install github.com/go-delve/delve/cmd/dlv@latest \
+#   && go install github.com/air-verse/air@latest \
+#   && echo
 
 #################################################################################
 # Install Rust toolchain and components
@@ -736,26 +741,22 @@ RUN echo \
 RUN echo \
   && /usr/bin/curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
   && source $HOME/.cargo/env \
-  && rustup component add rustfmt clippy llvm-tools-preview rust-src rust-docs rust-analyzer \
-  && cargo install sccache \
-  && cargo install cargo-watch \
-  && cargo install cargo-edit \
   && echo 'source $HOME/.cargo/env' >> ~/.bashrc \
   && echo 'source $HOME/.cargo/env' >> ~/.zshrc \
   && echo
+# TODO: Components and cargo installs should be handled by workspace configuration
+# These compile from source and are the primary cause of 3+ hour builds
+#   && rustup component add rustfmt clippy llvm-tools-preview rust-src rust-docs rust-analyzer \
+#   && cargo install sccache \
+#   && cargo install cargo-watch \
+#   && cargo install cargo-edit \
 
 #################################################################################
-# Configure cargo for faster builds with lld and sccache
+# Configure cargo for faster builds with lld
 #################################################################################
 
-RUN echo \
-  && mkdir -p ~/.cargo \
-  && echo '[build]' >> ~/.cargo/config.toml \
-  && echo 'rustflags = ["-C", "link-arg=-fuse-ld=lld"]' >> ~/.cargo/config.toml \
-  && echo 'rustc-wrapper = "sccache"' >> ~/.cargo/config.toml \
-  && echo '[net]' >> ~/.cargo/config.toml \
-  && echo 'git-fetch-with-cli = true' >> ~/.cargo/config.toml \
-  && echo
+RUN mkdir -p ~/.cargo
+COPY --chown=ubuntu:ubuntu config/.cargo/config.toml /home/ubuntu/.cargo/config.toml
 
 #################################################################################
 # Install act CLI

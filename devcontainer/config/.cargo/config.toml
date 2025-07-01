@@ -1,0 +1,7 @@
+[build]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+# Note: sccache wrapper disabled until sccache is installed via workspace configuration
+# rustc-wrapper = "sccache"
+
+[net]
+git-fetch-with-cli = true

@@ -469,34 +469,35 @@ RUN echo \
 # Install Hugo - from current Dockerfile
 #################################################################################
 
-RUN echo \
-  && export NAME="hugo" \
-  && export TEST="${NAME} version" \
-  && export REPOSITORY="gohugoio/hugo" \
-  && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
-  && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
-  && export PKG="${NAME}_extended_${VERSION#v}_linux-${ARCH}.tar.gz" \
-  && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
-  && echo "---------------------------------------------------------"\
-  && echo "INFO[${NAME}] Installed:" \
-  && echo "INFO[${NAME}]   Command:        ${NAME}" \
-  && echo "INFO[${NAME}]   Package:        ${PKG}" \
-  && echo "INFO[${NAME}]   Latest Release: ${VERSION}" \
-  && echo "INFO[${NAME}]   Architecture:   ${ARCH}" \
-  && echo "INFO[${NAME}]   Source:         ${URL}" \
-  && echo "---------------------------------------------------------"\
-  && /usr/bin/curl --silent --show-error --tlsv1.2 --location ${URL} | tar xz -C /tmp \
-  && install -m 755 -o root -g root /tmp/${NAME} /usr/local/bin/${NAME} \
-  && rm -rf \
-  /var/lib/{apt,cache,log} \
-  /usr/share/{doc,man,locale} \
-  /var/cache/apt \
-  /home/*/.cache \
-  /root/.cache \
-  /var/tmp/* \
-  /tmp/* \
-  && ${TEST} \
-  && echo
+# Hugo installation commented out - not needed currently
+# RUN echo \
+#   && export NAME="hugo" \
+#   && export TEST="${NAME} version" \
+#   && export REPOSITORY="gohugoio/hugo" \
+#   && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
+#   && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
+#   && export PKG="${NAME}_extended_${VERSION#v}_linux-${ARCH}.tar.gz" \
+#   && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
+#   && echo "---------------------------------------------------------"\
+#   && echo "INFO[${NAME}] Installed:" \
+#   && echo "INFO[${NAME}]   Command:        ${NAME}" \
+#   && echo "INFO[${NAME}]   Package:        ${PKG}" \
+#   && echo "INFO[${NAME}]   Latest Release: ${VERSION}" \
+#   && echo "INFO[${NAME}]   Architecture:   ${ARCH}" \
+#   && echo "INFO[${NAME}]   Source:         ${URL}" \
+#   && echo "---------------------------------------------------------"\
+#   && /usr/bin/curl --silent --show-error --tlsv1.2 --location ${URL} | tar xz -C /tmp \
+#   && install -m 755 -o root -g root /tmp/${NAME} /usr/local/bin/${NAME} \
+#   && rm -rf \
+#   /var/lib/{apt,cache,log} \
+#   /usr/share/{doc,man,locale} \
+#   /var/cache/apt \
+#   /home/*/.cache \
+#   /root/.cache \
+#   /var/tmp/* \
+#   /tmp/* \
+#   && ${TEST} \
+#   && echo
 
 #################################################################################
 # Switch to non-root user

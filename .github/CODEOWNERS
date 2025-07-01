@@ -1,0 +1,7 @@
+# GitHub Workflows Protection
+# These files require review from the workflow maintainers team
+/.github/workflows/ @braincraftio/workflow-maintainers
+
+# DevContainer Definition
+# Changes to the devcontainer require review from the platform team
+/devcontainer/ @braincraftio/platform-team

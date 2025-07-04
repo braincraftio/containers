@@ -99,6 +99,7 @@ RUN echo \
   # Text processing and editors
   jq \
   yq \
+  bc \
   xmlstarlet \
   vim \
   nano \

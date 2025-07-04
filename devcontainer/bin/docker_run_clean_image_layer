@@ -1,0 +1,1180 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+#
+# docker_clean_layer - Docker Container Image Layer Optimizer
+#
+# Purpose:
+#   Removes unnecessary files from Docker container images to minimize layer size.
+#   Used as the last step in every Dockerfile RUN command to optimize that layer.
+#
+# Usage:
+#   docker_clean_layer [OPTIONS]
+#
+# Options:
+#   --help          Show this help message
+#   --version       Show version information
+#   --dry-run       Preview what would be removed without removing
+#
+# Environment Variables:
+#   CLEANUP_LEVEL="${CLEANUP_LEVEL:-safe}"          - Cleanup aggressiveness (safe/normal/aggressive)
+#   DRY_RUN="${DRY_RUN:-false}"                    - Preview mode
+#   VERBOSE="${VERBOSE:-false}"                    - Detailed output
+#   SKIP_APT_CLEANUP="${SKIP_APT_CLEANUP:-false}"  - Skip package cleanup
+#   CUSTOM_PATTERNS="${CUSTOM_PATTERNS:-}"         - Additional patterns
+#
+# Exit Codes:
+#   0 - Success
+#   1 - Error
+
+# Style Guide Exception: Intentionally omitting -e flag to allow test suite
+# to continue running and report all pass/fail results rather than exiting
+# on first failure. This provides better visibility into multiple issues
+# during development and CI/CD pipelines.
+set -uo pipefail
+
+#######################################
+# Script Metadata
+#######################################
+readonly SCRIPT_VERSION="1.0.0"
+readonly SCRIPT_NAME="${0##*/}"
+
+#######################################
+# Lock Configuration
+#######################################
+readonly LOCK_DIR="/var/lock"
+readonly LOCK_FILE="${LOCK_DIR}/docker_clean_layer.lock"
+readonly LOCK_TIMEOUT=300  # 5 minutes
+declare LOCK_FD
+
+#######################################
+# Configuration Layer
+#######################################
+
+# Configuration from environment with defaults
+# Note: CONFIG needs to be mutable for --dry-run command line override
+declare -A CONFIG=(
+  ["dry_run"]="${DRY_RUN:-false}"
+  ["verbose"]="${VERBOSE:-false}"
+  ["skip_apt_cleanup"]="${SKIP_APT_CLEANUP:-false}"
+  ["custom_patterns"]="${CUSTOM_PATTERNS:-}"
+  # Conservative defaults for production safety
+  ["preserve_docs"]="${PRESERVE_DOCS:-true}"  # Safe default
+  ["preserve_locales"]="${PRESERVE_LOCALES:-en,en_US,C,POSIX}"  # Common locales
+  ["preserve_timezones"]="${PRESERVE_TIMEZONES:-UTC,GMT,localtime,posixrules}"  # Common timezones
+  ["cleanup_level"]="${CLEANUP_LEVEL:-safe}"  # safe/normal/aggressive
+  ["preserve_patterns"]="${PRESERVE_PATTERNS:-}"
+)
+
+# System paths to exclude
+readonly -a SYSTEM_PATHS=(
+  "/" "/bin" "/boot" "/dev" "/etc" "/lib" "/lib32" "/lib64"
+  "/proc" "/root" "/run" "/sbin" "/sys" "/usr/bin" "/usr/sbin"
+  "/usr/lib" "/usr/lib32" "/usr/lib64" "/usr/libexec"
+)
+
+# Find exclusion arguments
+readonly -a SYSTEM_EXCLUDES=(
+  -path /proc -o -path /sys -o -path /dev -o -path /run
+)
+
+
+#######################################
+# Logging functions
+#######################################
+log() { echo "[INFO] $*"; }
+err() { echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $*" >&2; }
+verbose() { if [[ "${CONFIG[verbose]}" == "true" ]]; then echo "[VERBOSE] $*"; fi; }
+progress() { if [[ "${CONFIG[dry_run]}" != "true" ]]; then echo "==> $*"; fi; }
+dry_run_log() { [[ "${CONFIG[dry_run]}" == "true" ]] && echo "[DRY-RUN] $*"; }
+
+# Global summary data - mutable for tracking
+declare -A SUMMARY=(
+  ["files_removed"]=0
+  ["dirs_removed"]=0
+  ["operations"]=0
+)
+
+#######################################
+# Data Layer
+#######################################
+
+# Primary cleanup patterns
+readonly -A CLEANUP_PATTERNS=(
+  # Python artifacts
+  ["python.cache"]="__pycache__ .pytest_cache .mypy_cache .ruff_cache .hypothesis .tox .nox .coverage .cache/pip .cache/pip-tools"
+  ["python.build"]="*.egg-info .eggs dist build *.whl .Python *.egg wheelhouse"
+  ["python.compiled"]="*.pyc *.pyo *.pyd"
+  ["python.conda"]=".conda/pkgs .conda/envs/*/pkgs conda-meta"
+  ["python.wheels"]="/root/.cache/pip/wheels /home/*/.cache/pip/wheels"
+
+  # Node.js artifacts
+  ["node.cache"]="node_modules/.cache .npm .yarn .pnpm-store .cache/yarn .cache/npm"
+  ["node.build"]=".next .nuxt .svelte-kit .parcel-cache *.tsbuildinfo .vite .turbo"
+  ["node.logs"]="npm-debug.log* yarn-error.log* lerna-debug.log* pnpm-debug.log*"
+
+  # Java/JVM artifacts
+  ["java.build"]="target .gradle/build .m2/repository"
+  ["java.cache"]=".gradle/caches .m2/wrapper .ivy2/cache .gradle/wrapper"
+
+  # Go artifacts
+  ["go.cache"]=".cache/go-build go/pkg/mod/cache"
+  ["go.temp"]="/tmp/go-build*"
+
+  # Rust artifacts
+  ["rust.cache"]=".cargo/registry/cache .cargo/git"
+  ["rust.build"]="target .rustup/downloads .rustup/tmp"
+
+  # Ruby artifacts
+  ["ruby.cache"]=".gem/cache .bundle/cache vendor/bundle/cache"
+
+  # PHP artifacts
+  ["php.cache"]=".composer/cache vendor/composer/cache storage/framework/cache"
+  ["php.logs"]="storage/logs/*.log var/log/*.log"
+  ["php.build"]="*/vendor/bin/* bootstrap/cache/packages.php bootstrap/cache/services.php"
+
+  # .NET/C# artifacts
+  ["dotnet.cache"]=".nuget/packages .dotnet/cache"
+  ["dotnet.build"]="*/bin/Debug */bin/Release */obj/Debug */obj/Release"
+  ["dotnet.publish"]="*/publish/*"
+
+  # Container-specific artifacts
+  ["container.buildkit"]="/var/lib/buildkit/*"
+  ["container.tmp"]="/var/lib/docker/tmp/* /var/lib/containerd/tmp/*"
+  ["container.overlay"]="/var/lib/docker/overlay2/*/diff/tmp/*"
+
+  # System artifacts
+  ["system.temp"]="/tmp/* /var/tmp/* !/tmp/.keep"
+  ["system.logs"]="/var/log/syslog* /var/log/messages* /var/log/kern.log* /var/log/auth.log* /var/log/daemon.log* /var/log/user.log*"
+  ["system.cache"]="/var/cache/* !/var/cache/apt !/var/cache/debconf"
+
+  # APT artifacts
+  ["apt.lists"]="/var/lib/apt/lists/*"
+  ["apt.cache"]="/var/cache/apt/archives/*.deb /var/cache/apt/*.bin"
+  ["apt.old"]="/var/lib/dpkg/*-old /var/lib/dpkg/lock"
+
+  # YUM/DNF artifacts
+  ["yum.cache"]="/var/cache/yum/* /var/cache/dnf/*"
+  ["yum.logs"]="/var/log/yum.log* /var/log/dnf.log*"
+
+  # APK (Alpine) artifacts
+  ["apk.cache"]="/var/cache/apk/* /etc/apk/cache/*"
+
+  # Zypper (openSUSE) artifacts
+  ["zypper.cache"]="/var/cache/zypp/*"
+  ["zypper.logs"]="/var/log/zypper.log*"
+
+  # Build tools
+  ["build.artifacts"]=".cache/bazel _build .stack-work"
+  ["build.temp"]="*.o *.lo *.la .deps .libs"
+
+  # Documentation (optional removal)
+  ["docs.man"]="/usr/share/man/*"
+  ["docs.info"]="/usr/share/info/*"
+  ["docs.doc"]="/usr/share/doc/*"
+  ["docs.gtk"]="/usr/share/gtk-doc/*"
+
+  # Test artifacts
+  ["test.coverage"]=".coverage* htmlcov .nyc_output coverage"
+  ["test.results"]="test-results .jest-cache"
+
+  # IDE artifacts
+  ["ide.cache"]=".idea .vscode .project .classpath .settings"
+
+  # Package manager artifacts
+  ["pkg.composer"]=".composer vendor/composer /root/.composer/cache /home/*/.composer/cache"
+  ["pkg.pip"]=".cache/pip pip-log.txt pip-delete-this-directory.txt /root/.cache/pip /home/*/.cache/pip"
+  ["pkg.npm"]="/root/.npm/_cacache /home/*/.npm/_cacache /usr/local/share/.cache/yarn"
+  ["pkg.gem"]="/root/.gem/specs /home/*/.gem/specs /usr/local/bundle/cache"
+  ["pkg.cargo"]="/root/.cargo/registry /home/*/.cargo/registry"
+  ["pkg.nuget"]="/root/.nuget/packages /home/*/.nuget/packages"
+)
+
+# Directory-specific cleanup operations
+# shellcheck disable=SC2034  # Used via nameref in process_cleanup_operation
+readonly -A DIRECTORY_CLEANUPS=(
+  ["/usr/share/locale"]="* !/en* !/C.UTF-8 !/locale.alias"
+  ["/var/cache/debconf"]="* !/var/cache/debconf/config.dat !/var/cache/debconf/passwords.dat !/var/cache/debconf/templates.dat"
+  ["/usr/share/zoneinfo"]="* !/UTC !/GMT !/posix !/right"
+  ["/usr/share/i18n"]="* !/SUPPORTED !/locales"
+)
+
+# Size-based cleanup patterns
+# shellcheck disable=SC2034  # Used via nameref in process_cleanup_operation
+readonly -A SIZE_BASED_CLEANUPS=(
+  ["*.log"]="+10M"
+  ["core"]="+0"
+  ["*.tmp"]="+100M"
+  ["*.temp"]="+100M"
+  ["*.cache"]="+500M"
+)
+
+# Special file patterns to remove - replaced with function mapping for security
+# shellcheck disable=SC2034  # Used via nameref in cleanup_special
+declare -A SPECIAL_REMOVAL_FUNCTIONS=(
+  ["broken_symlinks"]="remove_broken_symlinks"
+  ["empty_directories"]="remove_empty_directories"
+  ["orphaned_bytecode"]="remove_orphaned_bytecode"
+  ["zero_byte_temps"]="remove_zero_byte_temps"
+)
+
+# Files to truncate instead of remove
+readonly -a TRUNCATE_FILES=(
+  "/etc/machine-id"
+  "/var/lib/dbus/machine-id"
+  "/etc/hostname"
+)
+
+#######################################
+# Safety Layer
+#######################################
+
+#######################################
+# Validate if a path should be removed
+# Globals:
+#   SYSTEM_PATHS (read)
+# Arguments:
+#   $1 - path: The file or directory path to validate
+# Outputs:
+#   Verbose messages for suspicious paths
+# Returns:
+#   0 if path can be removed, 1 if protected
+#######################################
+should_remove() {
+  local path=$1
+
+  # Check preservation patterns first
+  if [[ -n "${CONFIG[preserve_patterns]}" ]]; then
+    local pattern
+    for pattern in ${CONFIG[preserve_patterns]}; do
+      # shellcheck disable=SC2053  # We want glob matching here
+      if [[ "$path" == $pattern ]]; then
+        verbose "Preserving $path (matches preservation pattern)"
+        return 1
+      fi
+    done
+  fi
+
+  # Protect system paths
+  for sys_path in "${SYSTEM_PATHS[@]}"; do
+    [[ "$path" == "$sys_path" ]] && return 1
+  done
+
+  # Check for path traversal attempts
+  [[ "$path" == *".."* ]] && {
+    verbose "Skipping suspicious path: $path"
+    return 1
+  }
+
+  # Validate symlinks
+  if [[ -L "$path" ]]; then
+    local target
+    target=$(readlink -f "$path" 2>/dev/null) || return 1
+    # Recursively check the target
+    should_remove "$target" || return 1
+  fi
+
+  return 0
+}
+
+#######################################
+# Remove a file or directory safely
+# Globals:
+#   CONFIG (read)
+#   SUMMARY (modified)
+# Arguments:
+#   $1 - path: The file or directory path to remove
+# Outputs:
+#   [DRY-RUN] messages in dry-run mode
+#   Verbose messages on failure
+# Returns:
+#   0 on success, 1 on failure
+#######################################
+remove_item() {
+  local path=$1
+
+  if [[ "${CONFIG[dry_run]}" == "true" ]]; then
+    dry_run_log "Would remove: $path"
+    return 0
+  fi
+
+  # Validate before removing
+  should_remove "$path" || return 1
+
+  if [[ -d "$path" ]] && [[ ! -L "$path" ]]; then
+    rm -rf -- "$path" 2>/dev/null || {
+      verbose "Failed to remove directory: $path"
+      return 1
+    }
+    ((SUMMARY["dirs_removed"]++)) || true
+  else
+    rm -f -- "$path" 2>/dev/null || {
+      verbose "Failed to remove file: $path"
+      return 1
+    }
+    ((SUMMARY["files_removed"]++)) || true
+  fi
+
+  return 0
+}
+
+#######################################
+# Execute find command and remove matching items
+# Globals:
+#   SYSTEM_EXCLUDES (read)
+#   CONFIG (read)
+# Arguments:
+#   $1 - description: Description of operation for logging
+#   $2 - start_path: Starting path for find (optional, defaults to /)
+#   $@ - find_args: Additional find arguments
+# Outputs:
+#   Count of removed items to stdout
+#   Verbose messages if VERBOSE=true
+# Returns:
+#   0 on success
+#######################################
+find_and_remove() {
+  local description="$1"
+  local start_path="/"
+  shift
+
+  # Check if second argument is a path
+  if [[ "$1" == /* ]] || [[ "$1" == "." ]]; then
+    start_path="$1"
+    shift
+  fi
+
+  local -a find_args=("$@")
+  local count=0
+  local item
+
+  # Build find command based on start path
+  local -a find_cmd=()
+  if [[ "$start_path" == "/" ]]; then
+    find_cmd=(find / \( "${SYSTEM_EXCLUDES[@]}" \) -prune -o)
+  else
+    find_cmd=(find "$start_path")
+  fi
+
+  # Add global preservation patterns if configured
+  if [[ -n "${CONFIG[preserve_patterns]}" ]]; then
+    local pattern
+    for pattern in ${CONFIG[preserve_patterns]}; do
+      find_cmd+=(\! -path "$pattern")
+    done
+  fi
+
+  # Process with existing safety
+  while IFS= read -r -d '' item; do
+    if remove_item "${item}"; then
+      ((count++)) || true
+    fi
+  done < <("${find_cmd[@]}" "${find_args[@]}" -print0 2>/dev/null)
+
+  echo "${count}"
+}
+
+#######################################
+# Execute command with consistent error handling
+# Globals:
+#   CONFIG (read)
+# Arguments:
+#   $1 - description: Description of operation
+#   $@ - command: Command and arguments to execute
+# Outputs:
+#   Dry-run message or command output
+# Returns:
+#   0 on success, 1 on failure
+#######################################
+execute_safely() {
+  local description="$1"
+  shift
+
+  # Check required arguments
+  if [[ -z "${description}" ]] || [[ $# -eq 0 ]]; then
+    err "execute_safely: description and command required"
+    return 1
+  fi
+
+  if [[ "${CONFIG[dry_run]}" == "true" ]]; then
+    dry_run_log "Would execute: $*"
+    return 0
+  fi
+
+  # Execute command and capture status immediately
+  if ! "$@"; then
+    local exit_code=$?
+    err "Failed ${description} (exit code: ${exit_code})"
+    return "${exit_code}"
+  fi
+
+  return 0
+}
+
+#######################################
+# Execution Layer
+#######################################
+
+#######################################
+# Process cleanup operations in a data-driven way
+# Globals:
+#   CONFIG (read)
+#   SUMMARY (modified)
+# Arguments:
+#   $1 - operation_type: Type of cleanup operation
+#   $2 - data_array_name: Name of array containing cleanup data
+# Outputs:
+#   Progress messages to stdout
+# Returns:
+#   0 on success
+#######################################
+process_cleanup_operation() {
+  local operation_type="${1}"
+  local data_array_name="${2}"
+  local -n data_array="${2}"  # nameref to the array
+
+  # Validate arguments
+  if [[ -z "${operation_type}" ]] || [[ -z "${data_array_name}" ]]; then
+    err "process_cleanup_operation: operation_type and data_array_name required"
+    return 1
+  fi
+
+  case "${operation_type}" in
+    "patterns")
+      # Process pattern-based cleanups (CLEANUP_PATTERNS)
+      for category in "${!data_array[@]}"; do
+        if should_process_category "$category"; then
+          process_pattern_cleanup "${category}" "${data_array[${category}]}"
+        else
+          verbose "Skipping $category (based on cleanup level)"
+        fi
+      done
+      ;;
+    "directories")
+      # Process directory-specific cleanups (DIRECTORY_CLEANUPS)
+      for dir in "${!data_array[@]}"; do
+        [[ ! -d "${dir}" ]] && continue
+        process_directory_cleanup "${dir}" "${data_array[${dir}]}"
+      done
+      ;;
+    "size")
+      # Process size-based cleanups (SIZE_BASED_CLEANUPS)
+      local total_count=0
+      for pattern in "${!data_array[@]}"; do
+        local count
+        count=$(find_and_remove "large files ${pattern}" "/" -type f -name "${pattern}" -size "${data_array[${pattern}]}")
+        ((total_count += count)) || true
+      done
+      if [[ "${total_count}" =~ ^[0-9]+$ ]] && [[ "${total_count}" -gt 0 ]]; then
+        progress "  → Removed ${total_count} large files"
+      fi
+      ;;
+    *)
+      err "Unknown operation type: ${operation_type}"
+      return 1
+      ;;
+  esac
+
+  return 0
+}
+
+#######################################
+# Process pattern-based cleanup for a category
+# Arguments:
+#   $1 - category: The cleanup category
+#   $2 - patterns: Space-separated patterns
+# Outputs:
+#   Progress messages
+# Returns:
+#   0 on success
+#######################################
+process_pattern_cleanup() {
+  local category="${1}"
+  local patterns="${2}"
+  local count=0
+
+  [[ -z "${patterns}" ]] && return 0
+
+  # Make category human-readable
+  local readable_category="${category//./ }"
+  readable_category="${readable_category^}"
+  progress "Cleaning ${readable_category} artifacts..."
+
+  # Build find arguments
+  local -a find_args=()
+  local pattern
+
+  for pattern in ${patterns}; do
+    [[ "${pattern}" == !* ]] && continue
+
+    case "${pattern}" in
+      /*) find_args+=(-path "${pattern}") ;;
+      */*) find_args+=(-path "*/${pattern}") ;;
+      *) find_args+=(-name "${pattern}") ;;
+    esac
+    find_args+=(-o)
+  done
+
+  # Remove trailing -o
+  [[ ${#find_args[@]} -gt 0 ]] && unset 'find_args[-1]'
+
+  # Execute cleanup
+  if [[ ${#find_args[@]} -gt 0 ]]; then
+    count=$(find_and_remove "${category}" \( "${find_args[@]}" \))
+  fi
+
+  if [[ "${count}" =~ ^[0-9]+$ ]] && [[ "${count}" -gt 0 ]]; then
+    progress "  → Removed ${count} items"
+  fi
+
+  return 0
+}
+
+#######################################
+# Process directory-specific cleanup
+# Arguments:
+#   $1 - dir: Directory to clean
+#   $2 - pattern: Cleanup pattern with exclusions
+# Outputs:
+#   Progress messages
+# Returns:
+#   0 on success
+#######################################
+process_directory_cleanup() {
+  local dir="${1}"
+  local pattern="${2}"
+
+  # Handle special directories with dynamic patterns
+  case "$dir" in
+    "/usr/share/locale")
+      pattern="* !/locale.alias"
+      local -a preserves
+      IFS=',' read -ra preserves <<< "${CONFIG[preserve_locales]}"
+      for item in "${preserves[@]}"; do
+        pattern+=" !/${item}*"
+      done
+      ;;
+    "/usr/share/zoneinfo")
+      pattern="* !/posix !/right"
+      local -a preserves
+      IFS=',' read -ra preserves <<< "${CONFIG[preserve_timezones]}"
+      for item in "${preserves[@]}"; do
+        pattern+=" !/${item}"
+      done
+      ;;
+  esac
+
+  progress "  → Cleaning ${dir}..."
+
+  # Parse exclusions
+  local -a excludes=()
+  local p
+
+  for p in ${pattern}; do
+    if [[ "${p}" == !* ]]; then
+      excludes+=("${p:1}")
+    fi
+  done
+
+  # Build find arguments
+  local -a find_args=(-mindepth 1)
+
+  for exclude in "${excludes[@]}"; do
+    find_args+=(\! -name "${exclude}")
+  done
+
+  # Execute cleanup
+  local count
+  count=$(find_and_remove "directory ${dir}" "${dir}" "${find_args[@]}")
+
+  if [[ "${count}" =~ ^[0-9]+$ ]] && [[ "${count}" -gt 0 ]]; then
+    progress "    → Removed ${count} items from ${dir}"
+  fi
+
+  return 0
+}
+
+#######################################
+# Clean APT package manager artifacts
+# Returns:
+#   0 on success
+#######################################
+cleanup_apt() {
+  progress "Cleaning APT package system..."
+
+  # Run autoremove if not skipped
+  if [[ "${CONFIG[skip_apt_cleanup]}" != "true" ]] && command -v apt-get &>/dev/null; then
+    progress "  → Running apt-get autoremove..."
+    execute_safely "apt-get autoremove" apt-get autoremove -y --purge || true
+    execute_safely "apt-get clean" apt-get clean || true
+    if [[ "${CONFIG[dry_run]}" != "true" ]]; then
+      ((SUMMARY["operations"]++)) || true
+    fi
+  fi
+
+  # Clean APT artifacts
+  for category in apt.lists apt.cache apt.old; do
+    process_pattern_cleanup "$category" "${CLEANUP_PATTERNS[$category]}"
+  done
+
+  recreate_critical_directories
+}
+
+#######################################
+# Reset machine-specific ID files
+# Globals:
+#   CONFIG (read)
+#   SUMMARY (modified)
+#   TRUNCATE_FILES (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+cleanup_machine_ids() {
+  local count=0
+
+  for id_file in "${TRUNCATE_FILES[@]}"; do
+    if [[ -f "$id_file" ]] && [[ ! -L "$id_file" ]]; then
+      if [[ "${CONFIG[dry_run]}" == "true" ]]; then
+        dry_run_log "Would truncate: $id_file"
+      else
+        : > "$id_file" 2>/dev/null || true
+        ((count++))
+      fi
+    fi
+  done
+
+  if [[ "$count" -gt 0 ]]; then
+    progress "  → Reset $count machine ID files"
+    ((SUMMARY["operations"] += count)) || true
+  fi
+}
+
+#######################################
+# Remove broken symlinks safely
+# Globals:
+#   CONFIG (read)
+#   SYSTEM_EXCLUDES (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+# shellcheck disable=SC2317  # Function called dynamically via SPECIAL_REMOVAL_FUNCTIONS
+remove_broken_symlinks() {
+  local count
+  count=$(find_and_remove "broken symlinks" "/" -type l ! -e)
+  [[ $count -gt 0 ]] && progress "  → Removed $count broken symlinks"
+  return 0
+}
+
+#######################################
+# Remove empty directories
+# Globals:
+#   CONFIG (read)
+#   SYSTEM_EXCLUDES (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+# shellcheck disable=SC2317  # Function called dynamically via SPECIAL_REMOVAL_FUNCTIONS
+remove_empty_directories() {
+  local count
+  # Use -empty flag for efficiency
+  count=$(find_and_remove "empty directories" "/" -type d -empty)
+  [[ $count -gt 0 ]] && progress "  → Removed $count empty directories"
+  return 0
+}
+
+#######################################
+# Remove orphaned Python bytecode
+# Globals:
+#   CONFIG (read)
+#   SYSTEM_EXCLUDES (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+# shellcheck disable=SC2317  # Function called dynamically via SPECIAL_REMOVAL_FUNCTIONS
+remove_orphaned_bytecode() {
+  local count
+  count=$(find_and_remove "orphaned bytecode" "/" -name '*.pyc' -type f)
+  [[ $count -gt 0 ]] && progress "  → Removed $count orphaned bytecode files"
+  return 0
+}
+
+#######################################
+# Remove zero-byte temp files
+# Globals:
+#   CONFIG (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+# shellcheck disable=SC2317  # Function called dynamically via SPECIAL_REMOVAL_FUNCTIONS
+remove_zero_byte_temps() {
+  local count total=0
+  count=$(find_and_remove "zero-byte temps" "/tmp" -type f -size 0)
+  ((total += count)) || true
+  count=$(find_and_remove "zero-byte temps" "/var/tmp" -type f -size 0)
+  ((total += count)) || true
+  [[ $total -gt 0 ]] && progress "  → Removed $total zero-byte temp files"
+  return 0
+}
+
+#######################################
+# Execute special removals safely (UPDATED)
+# Globals:
+#   CONFIG (read)
+#   SPECIAL_REMOVAL_FUNCTIONS (read)
+# Returns:
+#   0 on success
+#######################################
+cleanup_special() {
+  local func_name
+  local operations=0
+
+  for desc in "${!SPECIAL_REMOVAL_FUNCTIONS[@]}"; do
+    func_name="${SPECIAL_REMOVAL_FUNCTIONS[$desc]}"
+
+    if [[ "${CONFIG[dry_run]}" == "true" ]]; then
+      dry_run_log "Would execute: $desc cleanup"
+    else
+      if type -t "$func_name" >/dev/null 2>&1; then
+        if "$func_name"; then
+          ((operations++)) || true
+        fi
+      else
+        err "Special removal function not found: $func_name"
+      fi
+    fi
+  done
+
+  if [[ "$operations" -gt 0 ]]; then
+    ((SUMMARY["operations"] += operations)) || true
+  fi
+  recreate_critical_directories
+}
+
+#######################################
+# Lock Management Functions
+#######################################
+
+#######################################
+# Acquire exclusive execution lock
+# Globals:
+#   LOCK_FILE (read)
+#   LOCK_FD (write)
+#   LOCK_TIMEOUT (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success, 1 on failure
+#######################################
+acquire_lock() {
+  # Ensure lock directory exists
+  if [[ ! -d "$LOCK_DIR" ]]; then
+    mkdir -p "$LOCK_DIR" 2>/dev/null || {
+      err "Cannot create lock directory: $LOCK_DIR"
+      return 1
+    }
+  fi
+
+  # Open lock file and get file descriptor
+  exec {LOCK_FD}>"$LOCK_FILE" || {
+    err "Cannot create lock file: $LOCK_FILE"
+    return 1
+  }
+
+  # Try to acquire exclusive lock with timeout
+  if ! flock -x -w "$LOCK_TIMEOUT" "$LOCK_FD"; then
+    err "Cannot acquire lock - another instance may be running"
+    err "Lock file: $LOCK_FILE"
+    err "Timeout after ${LOCK_TIMEOUT} seconds"
+    return 1
+  fi
+
+  # Write PID for debugging
+  echo $$ >&${LOCK_FD}
+
+  verbose "Acquired exclusive lock (PID: $$)"
+  return 0
+}
+
+#######################################
+# Release execution lock
+# Globals:
+#   LOCK_FD (read)
+#   LOCK_FILE (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+# shellcheck disable=SC2317  # Function called via trap
+release_lock() {
+  if [[ -n "${LOCK_FD:-}" ]]; then
+    # Close file descriptor (releases lock)
+    exec {LOCK_FD}>&- 2>/dev/null || true
+
+    # Remove lock file
+    rm -f "$LOCK_FILE" 2>/dev/null || true
+
+    verbose "Released execution lock"
+  fi
+
+  return 0
+}
+
+#######################################
+# Display cleanup summary
+# Globals:
+#   SUMMARY (read)
+# Outputs:
+#   Simple summary to stdout
+# Returns:
+#   0 on success
+#######################################
+display_summary() {
+  echo
+  log "=========================================="
+  log "Docker Layer Cleanup Complete"
+  log "=========================================="
+  log "Files removed:       ${SUMMARY[files_removed]}"
+  log "Directories removed: ${SUMMARY[dirs_removed]}"
+  log "Special operations:  ${SUMMARY[operations]}"
+  log "Total items cleaned: $((SUMMARY[files_removed] + SUMMARY[dirs_removed] + SUMMARY[operations]))"
+  log "=========================================="
+}
+
+#######################################
+# Helper to determine if category should be processed
+# Globals:
+#   CONFIG (read)
+# Arguments:
+#   $1 - category: Category to check
+# Returns:
+#   0 if should process, 1 if should skip
+#######################################
+should_process_category() {
+  local category="$1"
+
+  # Check preservation rules based on cleanup level
+  case "${CONFIG[cleanup_level]}" in
+    "safe")
+      [[ "$category" =~ ^(docs\.|system\.cache|.*\.cache) ]] && return 1
+      ;;
+    "normal")
+      [[ "$category" =~ ^(docs\.) ]] && [[ "${CONFIG[preserve_docs]}" == "true" ]] && return 1
+      ;;
+    "aggressive")
+      # Process everything
+      ;;
+  esac
+
+  return 0
+}
+
+#######################################
+# Orchestration Layer
+#######################################
+
+#######################################
+# Recreate critical directories after cleanup
+# Globals:
+#   CONFIG (read)
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+recreate_critical_directories() {
+  [[ "${CONFIG[dry_run]}" == "true" ]] && return 0
+
+  local -a required_dirs=(
+    "/tmp:1777" "/var/tmp:1777"
+    "/var/lib/apt/lists/partial:755" "/var/cache/apt/archives/partial:755"
+    "/etc/apt/preferences.d:755" "/etc/apt/apt.conf.d:755"
+  )
+
+  local dir_spec dir perms
+  for dir_spec in "${required_dirs[@]}"; do
+    IFS=: read -r dir perms <<< "${dir_spec}"
+    [[ ! -d "${dir}" ]] && mkdir -p "${dir}" 2>/dev/null && chmod "${perms}" "${dir}" 2>/dev/null
+  done
+}
+
+#######################################
+# Display help message
+# Globals:
+#   SCRIPT_NAME (read)
+#   SCRIPT_VERSION (read)
+# Outputs:
+#   Help text to stdout
+# Returns:
+#   None (function doesn't return)
+#######################################
+show_help() {
+  cat << EOF
+${SCRIPT_NAME} v${SCRIPT_VERSION} - Docker Build Layer Optimizer
+
+PURPOSE:
+  Removes unnecessary files from Docker container images to minimize layer size.
+  Designed to be used as the last command in Dockerfile RUN statements.
+
+USAGE:
+  ${SCRIPT_NAME} [OPTIONS]
+
+OPTIONS:
+  --help, -h      Show this help message
+  --version, -v   Show version information
+  --dry-run       Preview what would be removed without removing
+  --force         Force execution even if lock exists
+
+ENVIRONMENT VARIABLES:
+  CLEANUP_LEVEL=safe|normal|aggressive
+                              Control cleanup aggressiveness
+                              safe: Conservative, preserves caches/docs
+                              normal: Balanced cleanup
+                              aggressive: Maximum space savings
+                              (default: safe)
+
+  DRY_RUN=true                Preview mode without actual removal
+                              (default: false)
+
+  VERBOSE=true                Show detailed operation information
+                              (default: false)
+
+  SKIP_APT_CLEANUP=true       Skip apt-get autoremove to save time
+                              (default: false)
+
+  CUSTOM_PATTERNS             Space-separated additional patterns to remove
+                              Example: "*.tmp *.bak *.old"
+                              (default: empty)
+
+  PRESERVE_DOCS=true          Preserve documentation files
+                              (default: true in safe mode)
+
+  PRESERVE_LOCALES=en,es      Comma-separated list of locales to preserve
+                              (default: en,en_US,C,POSIX)
+
+  PRESERVE_TIMEZONES=UTC,EST  Comma-separated list of timezones to preserve
+                              (default: UTC,GMT,localtime,posixrules)
+
+  PRESERVE_PATTERNS=pattern   Additional patterns to preserve
+                              Example: "/var/log/app*"
+                              (default: empty)
+
+DOCKERFILE EXAMPLES:
+  # Basic usage - clean after package installation
+  RUN apt-get update && \\
+      apt-get install -y python3 python3-pip && \\
+      pip install numpy pandas && \\
+      docker_clean_layer
+
+  # Verbose mode for debugging
+  RUN apt-get update && \\
+      apt-get install -y nodejs npm && \\
+      VERBOSE=true docker_clean_layer
+
+  # Skip APT cleanup when installing temporary build dependencies
+  RUN apt-get update && \\
+      apt-get install -y build-essential && \\
+      make && make install && \\
+      apt-get remove -y build-essential && \\
+      SKIP_APT_CLEANUP=true docker_clean_layer
+
+  # Clean custom build artifacts
+  RUN git clone https://github.com/example/project && \\
+      cd project && make && make install && \\
+      cd / && rm -rf project && \\
+      CUSTOM_PATTERNS="*.o *.a *.so" docker_clean_layer
+
+  # Use aggressive cleanup for minimal image size
+  RUN apt-get update && \\
+      apt-get install -y python3 && \\
+      CLEANUP_LEVEL=aggressive docker_clean_layer
+
+  # Preview mode to see what would be removed
+  RUN DRY_RUN=true docker_clean_layer
+
+PERFORMANCE:
+  The script is optimized for build-time usage with minimal overhead.
+
+SAFETY:
+  - System paths are protected from removal
+  - Dry-run mode available for testing
+  - All operations logged when VERBOSE=true
+
+EOF
+}
+
+#######################################
+# Validate configuration
+# Globals:
+#   CONFIG (read)
+# Returns:
+#   0 if valid, 1 if invalid
+#######################################
+validate_configuration() {
+  # Check boolean variables
+  for var in dry_run verbose skip_apt_cleanup; do
+    local val="${CONFIG[$var]}"
+    [[ -n "$val" ]] && [[ "$val" != "true" ]] && [[ "$val" != "false" ]] && \
+      err "${var^^} must be 'true' or 'false', got: $val" && return 1
+  done
+
+  # Validate cleanup level
+  case "${CONFIG[cleanup_level]}" in
+    safe|normal|aggressive) ;;
+    *) err "CLEANUP_LEVEL must be 'safe', 'normal', or 'aggressive', got: ${CONFIG[cleanup_level]}" && return 1 ;;
+  esac
+
+  # Validate custom patterns
+  local patterns="${CONFIG[custom_patterns]:-}"
+  if [[ -n "$patterns" ]]; then
+    # Check for dangerous patterns
+    [[ "$patterns" =~ (^|[[:space:]])/[[:space:]]*($|[[:space:]]) ]] && \
+      err "CUSTOM_PATTERNS cannot contain root directory pattern" && return 1
+    [[ "$patterns" == *".."* ]] && \
+      err "CUSTOM_PATTERNS cannot contain directory traversal" && return 1
+  fi
+
+  return 0
+}
+
+#######################################
+# Main execution flow
+# Globals:
+#   All configuration globals (read)
+#   All counter globals (modified)
+# Arguments:
+#   $@ - Command line arguments
+# Outputs:
+#   Various status messages to stdout
+# Returns:
+#   Exits with 0 on success, 1 on error
+#######################################
+main() {
+  # Handle --force flag
+  local force_mode=false
+  for arg in "$@"; do
+    [[ "$arg" == "--force" ]] && force_mode=true
+  done
+
+  # Parse command line arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --version|-v)
+        echo "${SCRIPT_NAME} v${SCRIPT_VERSION}"
+        exit 0
+        ;;
+      --dry-run)
+        # Override CONFIG for dry-run mode
+        CONFIG[dry_run]=true
+        ;;
+      --force)
+        # Already processed above
+        ;;
+      *)
+        err "Unknown argument: $arg"
+        show_help
+        exit 1
+        ;;
+    esac
+  done
+
+  # Validate configuration before proceeding
+  if ! validate_configuration; then
+    exit 1
+  fi
+
+  # Container detection (unless forced)
+  if [[ ! -f /.dockerenv ]] && ! grep -q docker /proc/1/cgroup 2>/dev/null; then
+    if [[ "${FORCE_NON_DOCKER:-false}" != "true" ]]; then
+      err "WARNING: Not running in Docker container!"
+      err "This script is designed for Docker containers only."
+      err "Use FORCE_NON_DOCKER=true to override (dangerous!)"
+      exit 1
+    fi
+  fi
+
+  # Acquire lock unless forced
+  if [[ "$force_mode" != "true" ]] && ! acquire_lock; then
+    err "Another instance may be running. Use --force to override."
+    exit 1
+  fi
+
+  # Ensure lock is released on exit
+  trap 'release_lock' EXIT
+
+  # Display mode information
+  if [[ "${CONFIG[dry_run]}" == "true" ]]; then
+    log "Running in DRY-RUN mode - no files will be removed"
+  fi
+
+  # Show cleanup configuration
+  log "Cleanup Configuration:"
+  log "  Mode: ${CONFIG[cleanup_level]}"
+  log "  Preserve docs: ${CONFIG[preserve_docs]}"
+  log "  Preserve locales: ${CONFIG[preserve_locales]}"
+  log "  Preserve timezones: ${CONFIG[preserve_timezones]}"
+  [[ -n "${CONFIG[preserve_patterns]}" ]] && log "  Custom preserves: ${CONFIG[preserve_patterns]}"
+  [[ -n "${CONFIG[custom_patterns]}" ]] && log "  Custom removals: ${CONFIG[custom_patterns]}"
+  echo
+
+  # Start cleanup operations
+  log "Starting docker container cleanup..."
+  verbose "Running with verbose output enabled"
+
+  # Execute cleanup operations with simple progress
+  progress "Cleaning package manager artifacts..."
+  cleanup_apt
+
+  progress "Removing temporary files..."
+  process_cleanup_operation "patterns" "CLEANUP_PATTERNS"
+
+  progress "Cleaning directories..."
+  process_cleanup_operation "directories" "DIRECTORY_CLEANUPS"
+
+  progress "Removing large files..."
+  process_cleanup_operation "size" "SIZE_BASED_CLEANUPS"
+
+  progress "Resetting machine IDs..."
+  cleanup_machine_ids
+
+  # Process extra patterns if defined
+  if [[ -n "${CONFIG[custom_patterns]}" ]]; then
+    progress "Processing user-defined patterns..."
+    process_pattern_cleanup "custom" "${CONFIG[custom_patterns]}"
+  fi
+
+  progress "Running special cleanup operations..."
+  cleanup_special
+
+  # Final sync
+  if [[ "${CONFIG[dry_run]}" != "true" ]]; then
+    sync
+  fi
+
+  # Display simple summary
+  if [[ "${CONFIG[dry_run]}" != "true" ]]; then
+    display_summary
+  fi
+
+  log "Docker container cleanup completed successfully"
+
+  # Lock will be released by trap
+  exit 0
+}
+
+# Execute main function
+main "$@"
+

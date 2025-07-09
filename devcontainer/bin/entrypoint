@@ -18,35 +18,35 @@ echo ""
 # Ensure workspace permissions are correct
 if [[ -d "/workspace" ]]; then
     echo "📁 Ensuring correct workspace permissions..."
-    sudo chown -R ubuntu:ubuntu /workspace 2>/dev/null || true
+    sudo chown -R ubuntu:ubuntu /workspace 2> /dev/null || true
 fi
 
 # Check mise installation
-if command -v mise &>/dev/null; then
+if command -v mise &> /dev/null; then
     echo "✅ mise is available: $(mise --version)"
-    
+
     # Trust mise configuration if present
     if [[ -f "/workspace/.mise.toml" ]]; then
         echo "📦 Trusting mise configuration..."
         cd /workspace && mise trust --yes
         echo "📦 Installing tools defined in .mise.toml..."
         mise install || true
-    fi
+  fi
 else
     echo "⚠️  mise not found - tools will need manual installation"
 fi
 
 # Setup direnv if available
-if command -v direnv &>/dev/null; then
+if command -v direnv &> /dev/null; then
     echo "✅ direnv is available"
     if [[ -f "/workspace/.envrc" ]]; then
         echo "🔐 Allowing direnv for workspace..."
         direnv allow /workspace
-    fi
+  fi
 fi
 
 # Configure git
-if command -v git &>/dev/null; then
+if command -v git &> /dev/null; then
     echo "📝 Configuring git..."
     git config --global --add safe.directory '*'
     git config --global init.defaultBranch main
@@ -54,31 +54,31 @@ if command -v git &>/dev/null; then
 fi
 
 # Setup GitHub CLI if authenticated
-if command -v gh &>/dev/null; then
-    if gh auth status &>/dev/null; then
+if command -v gh &> /dev/null; then
+    if gh auth status &> /dev/null; then
         echo "✅ GitHub CLI authenticated"
         gh auth setup-git || true
-    else
+  else
         echo "ℹ️  GitHub CLI not authenticated - run 'gh auth login' to authenticate"
-    fi
+  fi
 fi
 
 # Show available tools
 echo ""
 echo "🛠️  Available tools:"
-echo "  - Go:     $(go version 2>/dev/null || echo 'not installed')"
-echo "  - Node:   $(node --version 2>/dev/null || echo 'not installed')"
-echo "  - Python: $(python3 --version 2>/dev/null || echo 'not installed')"
-echo "  - Rust:   $(rustc --version 2>/dev/null || echo 'not installed')"
-echo "  - Docker: $(docker --version 2>/dev/null || echo 'not installed')"
-echo "  - kubectl: $(kubectl version --client --short 2>/dev/null || echo 'not installed')"
-echo "  - Helm:   $(helm version --short 2>/dev/null || echo 'not installed')"
+echo "  - Go:     $(go version 2> /dev/null || echo 'not installed')"
+echo "  - Node:   $(node --version 2> /dev/null || echo 'not installed')"
+echo "  - Python: $(python3 --version 2> /dev/null || echo 'not installed')"
+echo "  - Rust:   $(rustc --version 2> /dev/null || echo 'not installed')"
+echo "  - Docker: $(docker --version 2> /dev/null || echo 'not installed')"
+echo "  - kubectl: $(kubectl version --client --short 2> /dev/null || echo 'not installed')"
+echo "  - Helm:   $(helm version --short 2> /dev/null || echo 'not installed')"
 
 # Show mise tasks if available
-if command -v mise &>/dev/null && [[ -f "/workspace/.mise.toml" ]]; then
+if command -v mise &> /dev/null && [[ -f "/workspace/.mise.toml" ]]; then
     echo ""
     echo "📋 Available mise tasks:"
-    mise tasks --no-header 2>/dev/null | head -10 || true
+    mise tasks --no-header 2> /dev/null | head -10 || true
     echo "   ... run 'mise tasks' to see all tasks"
 fi
 
@@ -88,7 +88,7 @@ echo "💡 Run 'mise tasks' to see available commands"
 echo ""
 
 # Execute the command passed to the container (or bash if none)
-if [ $# -eq 0 ]; then
+if [[ $# -eq 0 ]]; then
     exec /bin/bash -l
 else
     exec "$@"

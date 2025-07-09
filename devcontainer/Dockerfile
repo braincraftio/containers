@@ -58,204 +58,206 @@ ENV INSTALL="install -m 755 -o root -g root"
 #################################################################################
 
 # Install base system dependencies - comprehensive list from both Dockerfiles
+# SC2016: The 'eval "$(direnv hook bash)"' string is intentionally single-quoted to prevent expansion during Docker build
+# hadolint ignore=SC2016
 RUN echo \
   && apt-get update \
-  && TERM=linux DEBIAN_FRONTEND=noninteractive apt-get install -q --yes --purge --assume-yes --auto-remove --allow-downgrades -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' \
-  # Essential build tools
-  build-essential \
-  pkg-config \
-  cmake \
-  autoconf \
-  automake \
-  libtool \
-  ninja-build \
-  ccache \
-  make \
-  # Version control
-  git \
-  git-lfs \
-  # Network tools
-  curl \
-  wget \
-  netcat-openbsd \
-  dnsutils \
-  iputils-ping \
-  socat \
-  # Security tools
-  gnupg \
-  gnupg2 \
-  openssh-client \
-  ca-certificates \
-  apt-transport-https \
-  software-properties-common \
-  dirmngr \
-  lsb-release \
-  # Shell and terminal
-  bash \
-  bash-completion \
-  zsh \
-  tmux \
-  screen \
-  # Text processing and editors
-  jq \
-  yq \
-  bc \
-  xmlstarlet \
-  vim \
-  nano \
-  neovim \
-  # Archive tools
-  zip \
-  unzip \
-  tar \
-  gzip \
-  bzip2 \
-  xz-utils \
-  # System utilities
-  sudo \
-  locales \
-  tzdata \
-  htop \
-  tree \
-  file \
-  less \
-  # Development utilities
-  direnv \
-  httpie \
-  ripgrep \
-  fd-find \
-  bat \
-  eza \
-  fzf \
-  # Python build dependencies
-  python3-dev \
-  python3-pip \
-  python3-venv \
-  python3-setuptools \
-  python3-virtualenv \
-  python3-wheel \
-  # Required for some Python packages
-  libffi-dev \
-  libssl-dev \
-  # Required for some Node packages
-  libnode-dev \
-  node-gyp \
-  # Documentation tools
-  pandoc \
-  graphviz \
-  # Performance tools
-  valgrind \
-  heaptrack \
-  # Fast linker for Rust
-  lld \
-  # Go development (initial install, will be managed by mise)
-  golang-go \
-  # Playwright browser dependencies
-  libasound2t64 \
-  libatk-bridge2.0-0t64 \
-  libatk1.0-0t64 \
-  libatspi2.0-0t64 \
-  libcairo-gobject2 \
-  libcairo2 \
-  libcups2t64 \
-  libdbus-1-3 \
-  libdrm2 \
-  libgbm1 \
-  libgdk-pixbuf-2.0-0 \
-  libglib2.0-0t64 \
-  libgtk-3-0t64 \
-  libgtk-3-common \
-  libgtk-4-1 \
-  libgtk-4-common \
-  libnspr4 \
-  libnss3 \
-  libpango-1.0-0 \
-  libpangocairo-1.0-0 \
-  libx11-6 \
-  libx11-xcb1 \
-  libxcb1 \
-  libxcb-shm0 \
-  libxcomposite1 \
-  libxdamage1 \
-  libxext6 \
-  libxfixes3 \
-  libxi6 \
-  libxkbcommon0 \
-  libxrandr2 \
-  libxrender1 \
-  libxss1 \
-  libxtst6 \
-  # Additional Playwright dependencies
-  gstreamer1.0-libav \
-  gstreamer1.0-plugins-base \
-  gstreamer1.0-plugins-good \
-  gstreamer1.0-plugins-bad \
-  libenchant-2-2 \
-  libepoxy0 \
-  libevent-2.1-7t64 \
-  libflite1 \
-  libgles2 \
-  libgstreamer-gl1.0-0 \
-  libgstreamer-plugins-bad1.0-0 \
-  libgstreamer-plugins-base1.0-0 \
-  libgstreamer1.0-0 \
-  libharfbuzz-icu0 \
-  libharfbuzz0b \
-  libhyphen0 \
-  libicu74 \
-  libjpeg-turbo8 \
-  liblcms2-2 \
-  libmanette-0.2-0 \
-  libopus0 \
-  libpng16-16t64 \
-  libsecret-1-0 \
-  libsecret-common \
-  libvpx9 \
-  libwayland-client0 \
-  libwayland-cursor0 \
-  libwayland-egl1 \
-  libwayland-server0 \
-  libwebp7 \
-  libwebpdemux2 \
-  libwoff1 \
-  libx264-164 \
-  libxcb-xkb1 \
-  libxcursor1 \
-  libxinerama1 \
-  libxkbcommon-x11-0 \
-  libxkbfile1 \
-  libxml2 \
-  libxslt1.1 \
-  # Fonts for browsers
-  fonts-liberation \
-  fonts-noto-color-emoji \
-  fonts-unifont \
-  fonts-ipafont-gothic \
-  fonts-wqy-zenhei \
-  fonts-tlwg-loma-otf \
-  fonts-freefont-ttf \
-  xfonts-cyrillic \
-  xfonts-encodings \
-  xfonts-scalable \
-  xfonts-utils \
-  # Additional browser dependencies
-  libatomic1 \
-  libegl1 \
-  libevdev2 \
-  libavif16 \
-  xvfb \
-  x11-xkb-utils \
-  xserver-common \
+  && TERM=linux DEBIAN_FRONTEND=noninteractive apt-get install -q --yes --no-install-recommends --purge --assume-yes --auto-remove --allow-downgrades -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' \
+    # Essential build tools
+    build-essential \
+    pkg-config \
+    cmake \
+    autoconf \
+    automake \
+    libtool \
+    ninja-build \
+    ccache \
+    make \
+    # Version control
+    git \
+    git-lfs \
+    # Network tools
+    curl \
+    wget \
+    netcat-openbsd \
+    dnsutils \
+    iputils-ping \
+    socat \
+    # Security tools
+    gnupg \
+    gnupg2 \
+    openssh-client \
+    ca-certificates \
+    apt-transport-https \
+    software-properties-common \
+    dirmngr \
+    lsb-release \
+    # Shell and terminal
+    bash \
+    bash-completion \
+    zsh \
+    tmux \
+    screen \
+    # Text processing and editors
+    jq \
+    yq \
+    bc \
+    xmlstarlet \
+    vim \
+    nano \
+    neovim \
+    # Archive tools
+    zip \
+    unzip \
+    tar \
+    gzip \
+    bzip2 \
+    xz-utils \
+    # System utilities
+    sudo \
+    locales \
+    tzdata \
+    htop \
+    tree \
+    file \
+    less \
+    # Development utilities
+    direnv \
+    httpie \
+    ripgrep \
+    fd-find \
+    bat \
+    eza \
+    fzf \
+    # Python build dependencies
+    python3-dev \
+    python3-pip \
+    python3-venv \
+    python3-setuptools \
+    python3-virtualenv \
+    python3-wheel \
+    # Required for some Python packages
+    libffi-dev \
+    libssl-dev \
+    # Required for some Node packages
+    libnode-dev \
+    node-gyp \
+    # Documentation tools
+    pandoc \
+    graphviz \
+    # Performance tools
+    valgrind \
+    heaptrack \
+    # Fast linker for Rust
+    lld \
+    # Go development (initial install, will be managed by mise)
+    golang-go \
+    # Playwright browser dependencies
+    libasound2t64 \
+    libatk-bridge2.0-0t64 \
+    libatk1.0-0t64 \
+    libatspi2.0-0t64 \
+    libcairo-gobject2 \
+    libcairo2 \
+    libcups2t64 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgdk-pixbuf-2.0-0 \
+    libglib2.0-0t64 \
+    libgtk-3-0t64 \
+    libgtk-3-common \
+    libgtk-4-1 \
+    libgtk-4-common \
+    libnspr4 \
+    libnss3 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcb-shm0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+    # Additional Playwright dependencies
+    gstreamer1.0-libav \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    libenchant-2-2 \
+    libepoxy0 \
+    libevent-2.1-7t64 \
+    libflite1 \
+    libgles2 \
+    libgstreamer-gl1.0-0 \
+    libgstreamer-plugins-bad1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
+    libgstreamer1.0-0 \
+    libharfbuzz-icu0 \
+    libharfbuzz0b \
+    libhyphen0 \
+    libicu74 \
+    libjpeg-turbo8 \
+    liblcms2-2 \
+    libmanette-0.2-0 \
+    libopus0 \
+    libpng16-16t64 \
+    libsecret-1-0 \
+    libsecret-common \
+    libvpx9 \
+    libwayland-client0 \
+    libwayland-cursor0 \
+    libwayland-egl1 \
+    libwayland-server0 \
+    libwebp7 \
+    libwebpdemux2 \
+    libwoff1 \
+    libx264-164 \
+    libxcb-xkb1 \
+    libxcursor1 \
+    libxinerama1 \
+    libxkbcommon-x11-0 \
+    libxkbfile1 \
+    libxml2 \
+    libxslt1.1 \
+    # Fonts for browsers
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    fonts-unifont \
+    fonts-ipafont-gothic \
+    fonts-wqy-zenhei \
+    fonts-tlwg-loma-otf \
+    fonts-freefont-ttf \
+    xfonts-cyrillic \
+    xfonts-encodings \
+    xfonts-scalable \
+    xfonts-utils \
+    # Additional browser dependencies
+    libatomic1 \
+    libegl1 \
+    libevdev2 \
+    libavif16 \
+    xvfb \
+    x11-xkb-utils \
+    xserver-common \
   && echo 'eval "$(direnv hook bash)"' | tee -a /etc/bash.bashrc \
   && apt-get clean && apt-get autoremove -y && apt-get purge -y --auto-remove \
   && rm -rf \
-  /var/lib/{apt,cache,log} \
-  /usr/share/{doc,man,locale} \
-  /var/cache/apt \
-  /home/*/.cache \
-  /root/.cache \
-  /var/tmp/* \
-  /tmp/* \
+    /var/lib/{apt,cache,log} \
+    /usr/share/{doc,man,locale} \
+    /var/cache/apt \
+    /home/*/.cache \
+    /root/.cache \
+    /var/tmp/* \
+    /tmp/* \
   && echo
 
 #################################################################################
@@ -276,7 +278,7 @@ ENV LC_ALL=en_US.UTF-8
 
 # Create non-root user with sudo access
 RUN echo \
-  && (id ubuntu &>/dev/null || useradd -m -s /bin/bash ubuntu) \
+  && (id ubuntu &> /dev/null || useradd -m -s /bin/bash ubuntu) \
   && usermod -aG sudo ubuntu \
   && echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
   && echo "ubuntu ALL=(ALL) NOPASSWD:ALL" | tee /etc/sudoers.d/ubuntu \
@@ -326,35 +328,39 @@ RUN echo \
 RUN echo \
   && export NAME="docker" \
   && export TEST="${NAME} --version" \
-  && echo "---------------------------------------------------------"\
+  && echo "---------------------------------------------------------" \
   && echo "INFO[${NAME}] Installing Docker CLI" \
-  && echo "---------------------------------------------------------"\
+  && echo "---------------------------------------------------------" \
   && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
   && apt-get update \
-  && TERM=linux DEBIAN_FRONTEND=noninteractive apt-get install -q --yes --purge --assume-yes --auto-remove --allow-downgrades -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' docker-ce-cli docker-compose-plugin docker-buildx-plugin \
+  && TERM=linux DEBIAN_FRONTEND=noninteractive apt-get install -q --yes --no-install-recommends --purge --assume-yes --auto-remove --allow-downgrades -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' docker-ce-cli docker-compose-plugin docker-buildx-plugin \
   && apt-get clean && apt-get autoremove -y && apt-get purge -y --auto-remove \
   && rm -rf \
-  /var/lib/{apt,cache,log} \
-  /usr/share/{doc,man,locale} \
-  /var/cache/apt \
-  /home/*/.cache \
-  /root/.cache \
-  /var/tmp/* \
-  /tmp/* \
+    /var/lib/{apt,cache,log} \
+    /usr/share/{doc,man,locale} \
+    /var/cache/apt \
+    /home/*/.cache \
+    /root/.cache \
+    /var/tmp/* \
+    /tmp/* \
   && usermod -aG docker ubuntu \
-  && ${TEST} \
+  && eval "${TEST}" \
   && echo
 
 #################################################################################
 # Install kubectl
 #################################################################################
 
+# SC2086: TEST variable contains a command string that needs to be evaluated, word splitting is intentional
+# hadolint ignore=SC2086
 RUN echo \
   && export NAME="kubectl" \
   && export TEST="${NAME} version --client" \
-  && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location -L -s https://dl.k8s.io/release/stable.txt)" \
-  && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
+  && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location -L -s https://dl.k8s.io/release/stable.txt)" \
+  && export VERSION \
+  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"amd64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && export ARCH \
   && export URL="https://dl.k8s.io/release/${VERSION}/bin/linux/${ARCH}/kubectl" \
   && echo "---------------------------------------------------------"\
   && echo "INFO[${NAME}] Installed:" \
@@ -363,7 +369,7 @@ RUN echo \
   && echo "INFO[${NAME}]   Architecture:   ${ARCH}" \
   && echo "INFO[${NAME}]   Source:         ${URL}" \
   && echo "---------------------------------------------------------"\
-  && /usr/bin/curl --silent --show-error --tlsv1.2 --location ${URL} --output /tmp/${NAME} \
+  && /usr/bin/curl --silent --show-error --tlsv1.2 --location "${URL}" --output "/tmp/${NAME}" \
   && install -m 755 -o root -g root /tmp/${NAME} /usr/local/bin/${NAME} \
   && rm -rf \
   /var/lib/{apt,cache,log} \
@@ -373,7 +379,7 @@ RUN echo \
   /root/.cache \
   /var/tmp/* \
   /tmp/* \
-  && ${TEST} \
+  && eval "${TEST}" \
   && echo
 
 #################################################################################
@@ -407,18 +413,23 @@ RUN echo \
 #   /root/.cache \
 #   /var/tmp/* \
 #   /tmp/* \
-#   && ${TEST} \
+#   && eval "${TEST}" \
 #   && echo
 
 #################################################################################
 # Install GitHub Actions Runner
 #################################################################################
 
+# DL3003: Using cd instead of WORKDIR because we need to extract files in this directory within the same RUN command
+# SC2086: TEST variable contains a command string that needs to be evaluated, word splitting is intentional
+# hadolint ignore=DL3003,SC2086
 RUN echo \
   && export NAME="actions-runner" \
   && export REPOSITORY="actions/runner" \
-  && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
-  && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "x64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
+  && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
+  && export VERSION \
+  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"x64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && export ARCH \
   && export PKG="${NAME}-linux-${ARCH}-${VERSION#v}.tar.gz" \
   && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
   && echo "---------------------------------------------------------"\
@@ -429,7 +440,7 @@ RUN echo \
   && echo "INFO[${NAME}]   Source:         ${URL}" \
   && echo "---------------------------------------------------------"\
   && cd /opt/actions-runner \
-  && /usr/bin/curl --silent --show-error --tlsv1.2 --location ${URL} | tar xz \
+  && /usr/bin/curl --silent --show-error --tlsv1.2 --location "${URL}" | tar xz \
   && ./bin/installdependencies.sh \
   && chown -R ubuntu:ubuntu /opt/actions-runner \
   && echo
@@ -438,12 +449,16 @@ RUN echo \
 # Install task (Taskfile) - from current Dockerfile
 #################################################################################
 
+# SC2086: TEST variable contains a command string that needs to be evaluated, word splitting is intentional
+# hadolint ignore=SC2086
 RUN echo \
   && export NAME="task" \
   && export TEST="${NAME} --version" \
   && export REPOSITORY="go-task/task" \
-  && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
-  && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
+  && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
+  && export VERSION \
+  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"amd64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && export ARCH \
   && export PKG="${NAME}_linux_${ARCH}.tar.gz" \
   && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
   && echo "---------------------------------------------------------"\
@@ -454,8 +469,8 @@ RUN echo \
   && echo "INFO[${NAME}]   Architecture:   ${ARCH}" \
   && echo "INFO[${NAME}]   Source:         ${URL}" \
   && echo "---------------------------------------------------------"\
-  && /usr/bin/curl --silent --show-error --tlsv1.2 --location ${URL} | tar xz -C /tmp \
-  && install -m 755 -o root -g root /tmp/${NAME} /usr/local/bin/${NAME} \
+  && /usr/bin/curl --silent --show-error --tlsv1.2 --location "${URL}" | tar xz -C /tmp \
+  && install -m 755 -o root -g root "/tmp/${NAME}" "/usr/local/bin/${NAME}" \
   && rm -rf \
   /var/lib/{apt,cache,log} \
   /usr/share/{doc,man,locale} \
@@ -464,7 +479,7 @@ RUN echo \
   /root/.cache \
   /var/tmp/* \
   /tmp/* \
-  && ${TEST} \
+  && eval "${TEST}" \
   && echo
 
 #################################################################################
@@ -498,7 +513,7 @@ RUN echo \
 #   /root/.cache \
 #   /var/tmp/* \
 #   /tmp/* \
-#   && ${TEST} \
+#   && eval "${TEST}" \
 #   && echo
 
 #################################################################################
@@ -512,6 +527,8 @@ WORKDIR /home/ubuntu
 # Install mise for tool version management
 #################################################################################
 
+# SC2016: Single quotes prevent expansion - we want literal strings written to shell config files
+# hadolint ignore=SC2016
 RUN echo \
   && curl https://mise.run | sh \
   && echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc \
@@ -538,6 +555,8 @@ RUN echo \
 # Configure shell environment
 #################################################################################
 
+# SC2016: Single quotes prevent expansion - we want literal strings written to shell config files
+# hadolint ignore=SC2016
 RUN echo \
   && echo 'eval "$(direnv hook bash)"' >> ~/.bashrc \
   && echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc \
@@ -559,12 +578,14 @@ RUN echo \
 # Setup shell prompt for better context awareness
 #################################################################################
 
-RUN echo 'export PS1="\[\033[01;32m\]\u@braincraftio\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "' >> ~/.bashrc
+RUN printf 'export PS1="\\[\\033[01;32m\\]\\u@braincraftio\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ "\\n' >> ~/.bashrc
 
 #################################################################################
 # Install starship prompt for better developer experience
 #################################################################################
 
+# SC2016: Single quotes prevent expansion - we want literal strings written to shell config files
+# hadolint ignore=SC2016
 RUN echo \
   && /usr/bin/curl --silent --show-error --tlsv1.2 --location https://starship.rs/install.sh | sh -s -- -y -b ~/.local/bin \
   && echo 'eval "$(starship init bash)"' >> ~/.bashrc \
@@ -575,7 +596,7 @@ RUN echo \
 # Configure starship
 #################################################################################
 
-COPY --chown=ubuntu:ubuntu <<EOF /home/ubuntu/.config/starship.toml
+COPY <<EOF /home/ubuntu/.config/starship.toml
 [container]
 disabled = true
 
@@ -629,39 +650,45 @@ FROM base AS development
 
 # Install GitHub CLI from official repository (already has gh from apt, but ensure latest)
 USER root
+# SC3009: Brace expansion {apt,cache,log} is a bash feature, but our SHELL is set to /bin/bash so this is safe
+# hadolint ignore=SC3009
 RUN echo \
   && export NAME="gh" \
   && export TEST="${NAME} --version" \
-  && echo "---------------------------------------------------------"\
+  && echo "---------------------------------------------------------" \
   && echo "INFO[${NAME}] Installing GitHub CLI from official repo" \
-  && echo "---------------------------------------------------------"\
+  && echo "---------------------------------------------------------" \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
   && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
   && apt-get update \
-  && TERM=linux DEBIAN_FRONTEND=noninteractive apt-get install -q --yes --purge --assume-yes --auto-remove --allow-downgrades -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' gh \
+  && TERM=linux DEBIAN_FRONTEND=noninteractive apt-get install -q --yes --no-install-recommends --purge --assume-yes --auto-remove --allow-downgrades -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' gh \
   && apt-get clean && apt-get autoremove -y && apt-get purge -y --auto-remove \
   && rm -rf \
-  /var/lib/{apt,cache,log} \
-  /usr/share/{doc,man,locale} \
-  /var/cache/apt \
-  /home/*/.cache \
-  /root/.cache \
-  /var/tmp/* \
-  /tmp/* \
-  && ${TEST} \
+    /var/lib/{apt,cache,log} \
+    /usr/share/{doc,man,locale} \
+    /var/cache/apt \
+    /home/*/.cache \
+    /root/.cache \
+    /var/tmp/* \
+    /tmp/* \
+  && eval "${TEST}" \
   && echo
 
 #################################################################################
 # Install act CLI
 #################################################################################
 
+# SC2086: TEST variable contains a command string that needs to be evaluated, word splitting is intentional
+# hadolint ignore=SC2086
 RUN echo \
   && export NAME="act" \
   && export TEST="${NAME} --version" \
   && export REPOSITORY="nektos/act" \
-  && export VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
-  && export ARCH=$(uname -m | awk '{ if ($1 == "x86_64") print "x86_64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }') \
+  && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
+  && export VERSION \
+  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"x86_64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && export ARCH \
   && export PKG="${NAME}_Linux_${ARCH}.tar.gz" \
   && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
   && echo "---------------------------------------------------------" \
@@ -672,11 +699,11 @@ RUN echo \
   && echo "INFO[${NAME}]   Architecture:   ${ARCH}" \
   && echo "INFO[${NAME}]   Source:         ${URL}" \
   && echo "---------------------------------------------------------" \
-  && /usr/bin/curl --silent --show-error --tlsv1.2 --location "${URL}" --output /tmp/${PKG} \
-  && tar xzf /tmp/${PKG} -C /usr/local/bin act \
+  && /usr/bin/curl --silent --show-error --tlsv1.2 --location "${URL}" --output "/tmp/${PKG}" \
+  && tar xzf "/tmp/${PKG}" -C /usr/local/bin act \
   && chmod +x /usr/local/bin/act \
-  && rm -f /tmp/${PKG} \
-  && ${TEST} \
+  && rm -f "/tmp/${PKG}" \
+  && eval "${TEST}" \
   && echo
 
 #################################################################################
@@ -772,6 +799,8 @@ WORKDIR /workspace
 # Install Rust toolchain and components
 #################################################################################
 
+# SC2016: Single quotes prevent expansion - we want literal strings written to shell config files
+# hadolint ignore=SC2016
 RUN echo \
   && /usr/bin/curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
   && source $HOME/.cargo/env \

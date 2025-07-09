@@ -26,3 +26,20 @@ not_found_auto_install = true
 
 # Number of parallel jobs for installations
 jobs = 4
+
+# Essential tools that should be pre-installed in devcontainer
+# These are the minimum required for immediate productivity
+# Full tool list is in /workspace/.config/mise/conf.d/00-tools.toml
+[tools]
+# Core languages - match versions from workspace config
+node = "24"       # Latest LTS - essential for npm packages
+python = "3.13.5" # Latest stable - essential for Python tools
+go = "1.24.5"     # Specific version for consistency
+
+# Critical package managers
+pnpm = "latest"   # Faster npm alternative
+pipx = "latest"   # Python app isolation
+
+# Essential dev tools
+gh = "latest"     # GitHub CLI - needed for auth
+jq = "latest"     # JSON processor - used by many scripts

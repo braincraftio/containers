@@ -428,7 +428,7 @@ RUN echo \
   && export REPOSITORY="actions/runner" \
   && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
   && export VERSION \
-  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"x64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && ARCH="$(uname -m | awk '{ if ($1 == "x86_64") print "x64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }')" \
   && export ARCH \
   && export PKG="${NAME}-linux-${ARCH}-${VERSION#v}.tar.gz" \
   && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
@@ -578,7 +578,7 @@ RUN echo \
 # Setup shell prompt for better context awareness
 #################################################################################
 
-RUN printf 'export PS1="\\[\\033[01;32m\\]\\u@braincraftio\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ "\\n' >> ~/.bashrc
+RUN printf 'export PS1="\\[\\033[01;32m\\]\\u@braincraftio\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ "\n' >> ~/.bashrc
 
 #################################################################################
 # Install starship prompt for better developer experience
@@ -717,18 +717,12 @@ WORKDIR /workspace
 # Install mise global tools that should be available immediately
 #################################################################################
 
-# TODO: Tools should be installed via workspace .mise.toml, not in container build
-# This was causing 3+ hour build times. Tools will be installed on first container
-# start and cached in persistent volumes.
-# RUN echo \
-#   && ~/.local/bin/mise use -g node@24 \
-#   && ~/.local/bin/mise use -g python@3.13 \
-#   && ~/.local/bin/mise use -g go@1.24.4 \
-#   && ~/.local/bin/mise use -g task@latest \
-#   && ~/.local/bin/mise use -g gh@latest \
-#   && ~/.local/bin/mise use -g jq@latest \
-#   && ~/.local/bin/mise use -g yq@latest \
-#   && echo
+# Pre-install essential tools for immediate productivity
+# Additional tools will be installed on first container start from workspace config
+RUN echo \
+  && /home/ubuntu/.local/bin/mise trust /home/ubuntu/.config/mise/config.toml \
+  && /home/ubuntu/.local/bin/mise install \
+  && echo
 
 #################################################################################
 # Pre-install some global npm packages for better DevX

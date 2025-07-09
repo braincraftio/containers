@@ -53,16 +53,16 @@ declare LOCK_FD
 # Configuration from environment with defaults
 # Note: CONFIG needs to be mutable for --dry-run command line override
 declare -A CONFIG=(
-                                                                                        ["dry_run"]="${DRY_RUN:-false}"
-                                                                                        ["verbose"]="${VERBOSE:-false}"
-                                                                                        ["skip_apt_cleanup"]="${SKIP_APT_CLEANUP:-false}"
-                                                                                        ["custom_patterns"]="${CUSTOM_PATTERNS:-}"
+                                                                                          ["dry_run"]="${DRY_RUN:-false}"
+                                                                                          ["verbose"]="${VERBOSE:-false}"
+                                                                                          ["skip_apt_cleanup"]="${SKIP_APT_CLEANUP:-false}"
+                                                                                          ["custom_patterns"]="${CUSTOM_PATTERNS:-}"
   # Conservative defaults for production safety
-                                                                                        ["preserve_docs"]="${PRESERVE_DOCS:-true}" # Safe default
-                                                                                        ["preserve_locales"]="${PRESERVE_LOCALES:-en,en_US,C,POSIX}" # Common locales
-                                                                                        ["preserve_timezones"]="${PRESERVE_TIMEZONES:-UTC,GMT,localtime,posixrules}" # Common timezones
-                                                                                        ["cleanup_level"]="${CLEANUP_LEVEL:-safe}" # safe/normal/aggressive
-                                                                                        ["preserve_patterns"]="${PRESERVE_PATTERNS:-}"
+                                                                                          ["preserve_docs"]="${PRESERVE_DOCS:-true}" # Safe default
+                                                                                          ["preserve_locales"]="${PRESERVE_LOCALES:-en,en_US,C,POSIX}" # Common locales
+                                                                                          ["preserve_timezones"]="${PRESERVE_TIMEZONES:-UTC,GMT,localtime,posixrules}" # Common timezones
+                                                                                          ["cleanup_level"]="${CLEANUP_LEVEL:-safe}" # safe/normal/aggressive
+                                                                                          ["preserve_patterns"]="${PRESERVE_PATTERNS:-}"
 )
 
 # System paths to exclude
@@ -88,9 +88,9 @@ dry_run_log() { [[ "${CONFIG[dry_run]}" == "true" ]] && echo "[DRY-RUN] $*"; }
 
 # Global summary data - mutable for tracking
 declare -A SUMMARY=(
-                                                                                        ["files_removed"]=0
-                                                                                        ["dirs_removed"]=0
-                                                                                        ["operations"]=0
+                                                                                          ["files_removed"]=0
+                                                                                          ["dirs_removed"]=0
+                                                                                          ["operations"]=0
 )
 
 #######################################
@@ -100,120 +100,120 @@ declare -A SUMMARY=(
 # Primary cleanup patterns
 readonly -A CLEANUP_PATTERNS=(
   # Python artifacts
-                                                                                        ["python.cache"]="__pycache__ .pytest_cache .mypy_cache .ruff_cache .hypothesis .tox .nox .coverage .cache/pip .cache/pip-tools"
-                                                                                        ["python.build"]="*.egg-info .eggs dist build *.whl .Python *.egg wheelhouse"
-                                                                                        ["python.compiled"]="*.pyc *.pyo *.pyd"
-                                                                                        ["python.conda"]=".conda/pkgs .conda/envs/*/pkgs conda-meta"
-                                                                                        ["python.wheels"]="/root/.cache/pip/wheels /home/*/.cache/pip/wheels"
+                                                                                          ["python.cache"]="__pycache__ .pytest_cache .mypy_cache .ruff_cache .hypothesis .tox .nox .coverage .cache/pip .cache/pip-tools"
+                                                                                          ["python.build"]="*.egg-info .eggs dist build *.whl .Python *.egg wheelhouse"
+                                                                                          ["python.compiled"]="*.pyc *.pyo *.pyd"
+                                                                                          ["python.conda"]=".conda/pkgs .conda/envs/*/pkgs conda-meta"
+                                                                                          ["python.wheels"]="/root/.cache/pip/wheels /home/*/.cache/pip/wheels"
 
   # Node.js artifacts
-                                                                                        ["node.cache"]="node_modules/.cache .npm .yarn .pnpm-store .cache/yarn .cache/npm"
-                                                                                        ["node.build"]=".next .nuxt .svelte-kit .parcel-cache *.tsbuildinfo .vite .turbo"
-                                                                                        ["node.logs"]="npm-debug.log* yarn-error.log* lerna-debug.log* pnpm-debug.log*"
+                                                                                          ["node.cache"]="node_modules/.cache .npm .yarn .pnpm-store .cache/yarn .cache/npm"
+                                                                                          ["node.build"]=".next .nuxt .svelte-kit .parcel-cache *.tsbuildinfo .vite .turbo"
+                                                                                          ["node.logs"]="npm-debug.log* yarn-error.log* lerna-debug.log* pnpm-debug.log*"
 
   # Java/JVM artifacts
-                                                                                        ["java.build"]="target .gradle/build .m2/repository"
-                                                                                        ["java.cache"]=".gradle/caches .m2/wrapper .ivy2/cache .gradle/wrapper"
+                                                                                          ["java.build"]="target .gradle/build .m2/repository"
+                                                                                          ["java.cache"]=".gradle/caches .m2/wrapper .ivy2/cache .gradle/wrapper"
 
   # Go artifacts
-                                                                                        ["go.cache"]=".cache/go-build go/pkg/mod/cache"
-                                                                                        ["go.temp"]="/tmp/go-build*"
+                                                                                          ["go.cache"]=".cache/go-build go/pkg/mod/cache"
+                                                                                          ["go.temp"]="/tmp/go-build*"
 
   # Rust artifacts
-                                                                                        ["rust.cache"]=".cargo/registry/cache .cargo/git"
-                                                                                        ["rust.build"]="target .rustup/downloads .rustup/tmp"
+                                                                                          ["rust.cache"]=".cargo/registry/cache .cargo/git"
+                                                                                          ["rust.build"]="target .rustup/downloads .rustup/tmp"
 
   # Ruby artifacts
-                                                                                        ["ruby.cache"]=".gem/cache .bundle/cache vendor/bundle/cache"
+                                                                                          ["ruby.cache"]=".gem/cache .bundle/cache vendor/bundle/cache"
 
   # PHP artifacts
-                                                                                        ["php.cache"]=".composer/cache vendor/composer/cache storage/framework/cache"
-                                                                                        ["php.logs"]="storage/logs/*.log var/log/*.log"
-                                                                                        ["php.build"]="*/vendor/bin/* bootstrap/cache/packages.php bootstrap/cache/services.php"
+                                                                                          ["php.cache"]=".composer/cache vendor/composer/cache storage/framework/cache"
+                                                                                          ["php.logs"]="storage/logs/*.log var/log/*.log"
+                                                                                          ["php.build"]="*/vendor/bin/* bootstrap/cache/packages.php bootstrap/cache/services.php"
 
   # .NET/C# artifacts
-                                                                                        ["dotnet.cache"]=".nuget/packages .dotnet/cache"
-                                                                                        ["dotnet.build"]="*/bin/Debug */bin/Release */obj/Debug */obj/Release"
-                                                                                        ["dotnet.publish"]="*/publish/*"
+                                                                                          ["dotnet.cache"]=".nuget/packages .dotnet/cache"
+                                                                                          ["dotnet.build"]="*/bin/Debug */bin/Release */obj/Debug */obj/Release"
+                                                                                          ["dotnet.publish"]="*/publish/*"
 
   # Container-specific artifacts
-                                                                                        ["container.buildkit"]="/var/lib/buildkit/*"
-                                                                                        ["container.tmp"]="/var/lib/docker/tmp/* /var/lib/containerd/tmp/*"
-                                                                                        ["container.overlay"]="/var/lib/docker/overlay2/*/diff/tmp/*"
+                                                                                          ["container.buildkit"]="/var/lib/buildkit/*"
+                                                                                          ["container.tmp"]="/var/lib/docker/tmp/* /var/lib/containerd/tmp/*"
+                                                                                          ["container.overlay"]="/var/lib/docker/overlay2/*/diff/tmp/*"
 
   # System artifacts
-                                                                                        ["system.temp"]="/tmp/* /var/tmp/* !/tmp/.keep"
-                                                                                        ["system.logs"]="/var/log/syslog* /var/log/messages* /var/log/kern.log* /var/log/auth.log* /var/log/daemon.log* /var/log/user.log*"
-                                                                                        ["system.cache"]="/var/cache/* !/var/cache/apt !/var/cache/debconf"
+                                                                                          ["system.temp"]="/tmp/* /var/tmp/* !/tmp/.keep"
+                                                                                          ["system.logs"]="/var/log/syslog* /var/log/messages* /var/log/kern.log* /var/log/auth.log* /var/log/daemon.log* /var/log/user.log*"
+                                                                                          ["system.cache"]="/var/cache/* !/var/cache/apt !/var/cache/debconf"
 
   # APT artifacts
-                                                                                        ["apt.lists"]="/var/lib/apt/lists/*"
-                                                                                        ["apt.cache"]="/var/cache/apt/archives/*.deb /var/cache/apt/*.bin"
-                                                                                        ["apt.old"]="/var/lib/dpkg/*-old /var/lib/dpkg/lock"
+                                                                                          ["apt.lists"]="/var/lib/apt/lists/*"
+                                                                                          ["apt.cache"]="/var/cache/apt/archives/*.deb /var/cache/apt/*.bin"
+                                                                                          ["apt.old"]="/var/lib/dpkg/*-old /var/lib/dpkg/lock"
 
   # YUM/DNF artifacts
-                                                                                        ["yum.cache"]="/var/cache/yum/* /var/cache/dnf/*"
-                                                                                        ["yum.logs"]="/var/log/yum.log* /var/log/dnf.log*"
+                                                                                          ["yum.cache"]="/var/cache/yum/* /var/cache/dnf/*"
+                                                                                          ["yum.logs"]="/var/log/yum.log* /var/log/dnf.log*"
 
   # APK (Alpine) artifacts
-                                                                                        ["apk.cache"]="/var/cache/apk/* /etc/apk/cache/*"
+                                                                                          ["apk.cache"]="/var/cache/apk/* /etc/apk/cache/*"
 
   # Zypper (openSUSE) artifacts
-                                                                                        ["zypper.cache"]="/var/cache/zypp/*"
-                                                                                        ["zypper.logs"]="/var/log/zypper.log*"
+                                                                                          ["zypper.cache"]="/var/cache/zypp/*"
+                                                                                          ["zypper.logs"]="/var/log/zypper.log*"
 
   # Build tools
-                                                                                        ["build.artifacts"]=".cache/bazel _build .stack-work"
-                                                                                        ["build.temp"]="*.o *.lo *.la .deps .libs"
+                                                                                          ["build.artifacts"]=".cache/bazel _build .stack-work"
+                                                                                          ["build.temp"]="*.o *.lo *.la .deps .libs"
 
   # Documentation (optional removal)
-                                                                                        ["docs.man"]="/usr/share/man/*"
-                                                                                        ["docs.info"]="/usr/share/info/*"
-                                                                                        ["docs.doc"]="/usr/share/doc/*"
-                                                                                        ["docs.gtk"]="/usr/share/gtk-doc/*"
+                                                                                          ["docs.man"]="/usr/share/man/*"
+                                                                                          ["docs.info"]="/usr/share/info/*"
+                                                                                          ["docs.doc"]="/usr/share/doc/*"
+                                                                                          ["docs.gtk"]="/usr/share/gtk-doc/*"
 
   # Test artifacts
-                                                                                        ["test.coverage"]=".coverage* htmlcov .nyc_output coverage"
-                                                                                        ["test.results"]="test-results .jest-cache"
+                                                                                          ["test.coverage"]=".coverage* htmlcov .nyc_output coverage"
+                                                                                          ["test.results"]="test-results .jest-cache"
 
   # IDE artifacts
-                                                                                        ["ide.cache"]=".idea .vscode .project .classpath .settings"
+                                                                                          ["ide.cache"]=".idea .vscode .project .classpath .settings"
 
   # Package manager artifacts
-                                                                                        ["pkg.composer"]=".composer vendor/composer /root/.composer/cache /home/*/.composer/cache"
-                                                                                        ["pkg.pip"]=".cache/pip pip-log.txt pip-delete-this-directory.txt /root/.cache/pip /home/*/.cache/pip"
-                                                                                        ["pkg.npm"]="/root/.npm/_cacache /home/*/.npm/_cacache /usr/local/share/.cache/yarn"
-                                                                                        ["pkg.gem"]="/root/.gem/specs /home/*/.gem/specs /usr/local/bundle/cache"
-                                                                                        ["pkg.cargo"]="/root/.cargo/registry /home/*/.cargo/registry"
-                                                                                        ["pkg.nuget"]="/root/.nuget/packages /home/*/.nuget/packages"
+                                                                                          ["pkg.composer"]=".composer vendor/composer /root/.composer/cache /home/*/.composer/cache"
+                                                                                          ["pkg.pip"]=".cache/pip pip-log.txt pip-delete-this-directory.txt /root/.cache/pip /home/*/.cache/pip"
+                                                                                          ["pkg.npm"]="/root/.npm/_cacache /home/*/.npm/_cacache /usr/local/share/.cache/yarn"
+                                                                                          ["pkg.gem"]="/root/.gem/specs /home/*/.gem/specs /usr/local/bundle/cache"
+                                                                                          ["pkg.cargo"]="/root/.cargo/registry /home/*/.cargo/registry"
+                                                                                          ["pkg.nuget"]="/root/.nuget/packages /home/*/.nuget/packages"
 )
 
 # Directory-specific cleanup operations
 # shellcheck disable=SC2034  # Used via nameref in process_cleanup_operation
 readonly -A DIRECTORY_CLEANUPS=(
-                                                                                        ["/usr/share/locale"]="* !/en* !/C.UTF-8 !/locale.alias"
-                                                                                        ["/var/cache/debconf"]="* !/var/cache/debconf/config.dat !/var/cache/debconf/passwords.dat !/var/cache/debconf/templates.dat"
-                                                                                        ["/usr/share/zoneinfo"]="* !/UTC !/GMT !/posix !/right"
-                                                                                        ["/usr/share/i18n"]="* !/SUPPORTED !/locales"
+                                                                                          ["/usr/share/locale"]="* !/en* !/C.UTF-8 !/locale.alias"
+                                                                                          ["/var/cache/debconf"]="* !/var/cache/debconf/config.dat !/var/cache/debconf/passwords.dat !/var/cache/debconf/templates.dat"
+                                                                                          ["/usr/share/zoneinfo"]="* !/UTC !/GMT !/posix !/right"
+                                                                                          ["/usr/share/i18n"]="* !/SUPPORTED !/locales"
 )
 
 # Size-based cleanup patterns
 # shellcheck disable=SC2034  # Used via nameref in process_cleanup_operation
 readonly -A SIZE_BASED_CLEANUPS=(
-                                                                                        ["*.log"]="+10M"
-                                                                                        ["core"]="+0"
-                                                                                        ["*.tmp"]="+100M"
-                                                                                        ["*.temp"]="+100M"
-                                                                                        ["*.cache"]="+500M"
+                                                                                          ["*.log"]="+10M"
+                                                                                          ["core"]="+0"
+                                                                                          ["*.tmp"]="+100M"
+                                                                                          ["*.temp"]="+100M"
+                                                                                          ["*.cache"]="+500M"
 )
 
 # Special file patterns to remove - replaced with function mapping for security
 # shellcheck disable=SC2034  # Used via nameref in cleanup_special
 declare -A SPECIAL_REMOVAL_FUNCTIONS=(
-                                                                                        ["broken_symlinks"]="remove_broken_symlinks"
-                                                                                        ["empty_directories"]="remove_empty_directories"
-                                                                                        ["orphaned_bytecode"]="remove_orphaned_bytecode"
-                                                                                        ["zero_byte_temps"]="remove_zero_byte_temps"
+                                                                                          ["broken_symlinks"]="remove_broken_symlinks"
+                                                                                          ["empty_directories"]="remove_empty_directories"
+                                                                                          ["orphaned_bytecode"]="remove_orphaned_bytecode"
+                                                                                          ["zero_byte_temps"]="remove_zero_byte_temps"
 )
 
 # Files to truncate instead of remove

@@ -359,7 +359,7 @@ RUN echo \
   && export TEST="${NAME} version --client" \
   && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location -L -s https://dl.k8s.io/release/stable.txt)" \
   && export VERSION \
-  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"amd64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && ARCH="$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }')" \
   && export ARCH \
   && export URL="https://dl.k8s.io/release/${VERSION}/bin/linux/${ARCH}/kubectl" \
   && echo "---------------------------------------------------------"\
@@ -457,7 +457,7 @@ RUN echo \
   && export REPOSITORY="go-task/task" \
   && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
   && export VERSION \
-  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"amd64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && ARCH="$(uname -m | awk '{ if ($1 == "x86_64") print "amd64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }')" \
   && export ARCH \
   && export PKG="${NAME}_linux_${ARCH}.tar.gz" \
   && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
@@ -687,7 +687,7 @@ RUN echo \
   && export REPOSITORY="nektos/act" \
   && VERSION="$(/usr/bin/curl --silent --show-error --tlsv1.2 --location https://api.github.com/repos/${REPOSITORY}/releases/latest | jq --raw-output .tag_name)" \
   && export VERSION \
-  && ARCH="$(uname -m | awk '{ if ($1 == \"x86_64\") print \"x86_64\"; else if ($1 == \"aarch64\" || $1 == \"arm64\") print \"arm64\"; else print \"unknown\" }')" \
+  && ARCH="$(uname -m | awk '{ if ($1 == "x86_64") print "x86_64"; else if ($1 == "aarch64" || $1 == "arm64") print "arm64"; else print "unknown" }')" \
   && export ARCH \
   && export PKG="${NAME}_Linux_${ARCH}.tar.gz" \
   && export URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}/${PKG}" \
